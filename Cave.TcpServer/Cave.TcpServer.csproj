@@ -1,0 +1,69 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;netcoreapp2.0;net45;net46;net47</TargetFrameworks>
+    <RootNamespace>Cave</RootNamespace>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <Authors>Andreas Rohleder</Authors>
+    <Company>CaveSystems GmbH, Andreas Rohleder</Company>
+    <Product>CaveSystems TcpServer Library</Product>
+    <Copyright>(c) 2003-2018 Andreas Rohleder</Copyright>
+    <PackageLicenseUrl>https://www.gnu.org/licenses/lgpl-3.0.en.html</PackageLicenseUrl>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>cave-tcpserver.snk</AssemblyOriginatorKeyFile>
+    <Version>1.0.0</Version>
+    <PackageIconUrl>https://www.cavesystems.de/favicon.ico</PackageIconUrl>
+    <PackageTags>CaveSystems TcpServer TcpAsyncClient</PackageTags>
+    <PackageProjectUrl>https://www.cavesystems.de</PackageProjectUrl>
+    <Description>Provides a high performance async tcp client and server implementation</Description>
+    <PackageProjectUrl>https://github.com/Dingsd4/cave-tcpserver</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Dingsd4/cave-tcpserver</RepositoryUrl>
+    <PackageReleaseNotes />
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>2018.1113.1337.1337</FileVersion>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <NeutralLanguage />
+    <DelaySign>false</DelaySign>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <DebugType>pdbonly</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>TRACE;DEBUG;</DefineConstants>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <IncludeSymbolsInPackage>true</IncludeSymbolsInPackage>
+    <EmbedSources>true</EmbedSources>
+  </PropertyGroup>
+
+  <!-- Workaround for EmbedSources support, see https://github.com/dotnet/roslyn/issues/19127-->
+  <Target Condition="'$(Configuration)'=='Debug'" Name="PopulateEmbeddedFiles" AfterTargets="BeforeCompile" BeforeTargets="CoreCompile">
+  <ItemGroup>
+    <EmbeddedFiles Include="@(Compile)" />
+  </ItemGroup>
+  </Target>
+
+  <PropertyGroup>
+    <DefineConstants Condition=" !$(DefineConstants.Contains(';NET')) ">$(DefineConstants);NET$(TargetFramework.ToUpper().Replace("_", "").Replace(".", "").Replace("NET", ""))</DefineConstants>
+    <DefineConstants Condition=" $(DefineConstants.Contains(';NET')) ">$(DefineConstants.Remove($(DefineConstants.LastIndexOf(";NET"))));NET$(TargetFramework.ToUpper().Replace("_", "").Replace(".", "").Replace("NET", ""))</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)'=='net40' OR '$(TargetFramework)'=='net45' OR '$(TargetFramework)'=='net46' OR '$(TargetFramework)'=='net47'">
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)'=='net20' OR '$(TargetFramework)'=='net35'">
+    <Reference Include="System" />
+  </ItemGroup>
+
+</Project>
