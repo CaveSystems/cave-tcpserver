@@ -46,7 +46,7 @@
 
 using System;
 
-namespace Cave
+namespace Cave.Net
 {
     /// <summary>
     /// Provides Event Arguments for the <see cref="TcpServer{TClient}"/> events.

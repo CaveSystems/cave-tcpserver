@@ -1,11 +1,12 @@
-﻿using Cave;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Cave.Net;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Test
 {
@@ -15,12 +16,14 @@ namespace Test
         [TestMethod]
         public void TestAccept()
         {
-            int port = Environment.TickCount % 1000 + 1000;
+            var id = "T" + MethodBase.GetCurrentMethod().GetHashCode().ToString("x4");
+            int port = 2048 + id.Last();
 
             TcpServer server = new TcpServer();
             server.AcceptThreads = 10;
             server.AcceptBacklog = 100;
             server.Listen(port);
+            Console.WriteLine($"Test : info {id}: Opened Server at port {port}.");
 
             using (TcpAsyncClient client = new TcpAsyncClient())
             {
@@ -28,19 +31,22 @@ namespace Test
                 client.Send(new byte[1000]);
                 client.Close();
             }
+            Console.WriteLine($"Test : info {id}: Test connect to ::1 successful.");
+
             using (TcpAsyncClient client = new TcpAsyncClient())
             {
                 client.Connect("127.0.0.1", port);
                 client.Send(new byte[1000]);
                 client.Close();
             }
+            Console.WriteLine($"Test : info {id}: Test connect to 127.0.0.1 successful.");
 
-            int count = 100000;
+            int count = 10000;
             var watch = Stopwatch.StartNew();
             int success = 0;
 
             var ip = IPAddress.Parse("127.0.0.1");
-            Parallel.For(1, count, new ParallelOptions() { MaxDegreeOfParallelism = 10 }, (n) =>
+            Parallel.For(0, count, new ParallelOptions() { MaxDegreeOfParallelism = 10 }, (n) =>
             {
                 using (TcpAsyncClient client = new TcpAsyncClient())
                 {
@@ -50,15 +56,16 @@ namespace Test
             });
             watch.Stop();
 
-            Console.WriteLine($"{success} connections in {watch.Elapsed}");
+            Console.WriteLine($"Test : info {id}: {success} connections in {watch.Elapsed}");
             double cps = Math.Round(success / watch.Elapsed.TotalSeconds, 2);
-            Console.WriteLine($"{cps} connections/s");
+            Console.WriteLine($"Test : info {id}: {cps} connections/s");
         }
 
         [TestMethod]
         public void TestSend()
         {
-            int port = Environment.TickCount % 1000 + 2000;
+            var id = "T" + MethodBase.GetCurrentMethod().GetHashCode().ToString("x4");
+            int port = 2048 + id.Last();
 
             TcpServer server = new TcpServer();
             server.Listen(port);
@@ -69,30 +76,31 @@ namespace Test
                     e2.Handled = true;
                 };
             };
+            Console.WriteLine($"Test : info {id}: Opened Server at port {port}.");
 
             long bytes = 0;
             var watch = Stopwatch.StartNew();
             var ip = IPAddress.Parse("127.0.0.1");
-            Parallel.For(1, 16, (n) =>
+
+            Parallel.For(0, 16, (n) =>
             {
                 using (TcpAsyncClient client = new TcpAsyncClient())
                 {
                     client.Connect(ip, port);
                     for (int d = 0; d < 256; d++)
                     {
-                        Interlocked.Add(ref bytes, 1024 * 1024);
                         client.Send(new byte[1024 * 1024]);
+                        Interlocked.Add(ref bytes, 1024 * 1024);
                     }
                     client.Close();
                 }
-                Trace.TraceInformation($"Client {n} completed.");
+                Console.WriteLine($"Test : info {id}: Client {n + 1} completed.");
             });
             watch.Stop();
 
-            Console.WriteLine($"{bytes.ToString("N")} bytes in {watch.Elapsed}");
+            Console.WriteLine($"Test : info {id}: {bytes.ToString("N")} bytes in {watch.Elapsed}");
             double bps = Math.Round(bytes / watch.Elapsed.TotalSeconds, 2);
-            Console.WriteLine($"{bps.ToString("N")} bytes/s");
+            Console.WriteLine($"Test : info {id}: {bps.ToString("N")} bytes/s");
         }
     }
 }
-

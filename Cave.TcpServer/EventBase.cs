@@ -49,7 +49,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
-namespace Cave
+namespace Cave.Net
 {
     /// <summary>
     /// Provides an OnError event and a generic CallEvent function.
@@ -63,7 +63,11 @@ namespace Cave
         /// <param name="callAsync">Create a threadpool thread to run the callback</param>
         protected void CallEvent<TEventArgs>(EventHandler<TEventArgs> callback, TEventArgs args, bool callAsync = false) where TEventArgs : EventArgs
         {
-            if (callback == null) return;
+            if (callback == null)
+            {
+                return;
+            }
+
             if (callAsync)
             {
                 Task.Factory.StartNew((p) =>
@@ -80,7 +84,10 @@ namespace Cave
             catch (Exception ex)
             {
                 Trace.TraceError("Error_CallingEvent {0} {1}", callback, args);
-                if (!callback.Equals(Error)) OnError(new ExceptionEventArgs(ex));
+                if (!callback.Equals(Error))
+                {
+                    OnError(new ExceptionEventArgs(ex));
+                }
             }
         }
 

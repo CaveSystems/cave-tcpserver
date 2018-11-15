@@ -44,15 +44,15 @@
  */
 #endregion
 
+using Cave.IO;
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Cave
+namespace Cave.Net
 {
     /// <summary>
     /// Provides an async tcp client implementation
@@ -73,7 +73,11 @@ namespace Cave
         void ReadCompleted(object sender, SocketAsyncEventArgs e)
         {
         ReadCompletedBegin:
-            if (m_Closing) return;
+            if (m_Closing)
+            {
+                return;
+            }
+
             int bytesTransferred = e.BytesTransferred;
 
             switch (e.SocketError)
@@ -265,8 +269,10 @@ namespace Cave
         /// <param name="bufferSize">tcp buffer size in bytes</param>
         public void Connect(string hostname, int port, int bufferSize = 64 * 1024)
         {
-            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            socket.ExclusiveAddressUse = false;
+            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
+            {
+                ExclusiveAddressUse = false
+            };
             Connect(socket, bufferSize, socket.BeginConnect(hostname, port, null, null));
         }        
 
@@ -278,8 +284,10 @@ namespace Cave
         /// <param name="bufferSize">tcp buffer size in bytes</param>
         public void Connect(IPAddress address, int port, int bufferSize = 64 * 1024)
         {
-            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            socket.ExclusiveAddressUse = false;
+            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
+            {
+                ExclusiveAddressUse = false
+            };
             Connect(socket, bufferSize, socket.BeginConnect(address, port, null, null));
         }
 
@@ -290,8 +298,10 @@ namespace Cave
         /// <param name="bufferSize">tcp buffer size in bytes</param>
         public void Connect(IPEndPoint endPoint, int bufferSize = 64 * 1024)
         {
-            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            socket.ExclusiveAddressUse = false;
+            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
+            {
+                ExclusiveAddressUse = false
+            };
             Connect(socket, bufferSize, socket.BeginConnect(endPoint, null, null));
         }
 
@@ -304,20 +314,38 @@ namespace Cave
 			return Stream;
 		}
 
+        /// <summary>
+        /// Sends data to a connected remote
+        /// </summary>
+        /// <param name="buffer"></param>
         public void Send(byte[] buffer)
         {
+            if (!IsConnected) { throw new InvalidOperationException("Not connected!"); }
             Socket.Send(buffer);
             Interlocked.Add(ref m_BytesSent, buffer.Length);
         }
 
+        /// <summary>
+        /// Sends data to a connected remote
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="length"></param>
         public void Send(byte[] buffer, int length)
         {
+            if (!IsConnected) { throw new InvalidOperationException("Not connected!"); }
             Socket.Send(buffer, 0, length, 0);
             Interlocked.Add(ref m_BytesSent, length);
         }
 
+        /// <summary>
+        /// Sends data to a connected remote
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="length"></param>
         public void Send(byte[] buffer, int offset, int length)
         {
+            if (!IsConnected) { throw new InvalidOperationException("Not connected!"); }
             Socket.Send(buffer, offset, length, 0);
             Interlocked.Add(ref m_BytesSent, length - offset);
         }
@@ -332,8 +360,12 @@ namespace Cave
         /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
         protected virtual void Dispose(bool disposing)
 		{
-            if (m_Closing) return;
-			m_Closing = true;
+            if (m_Closing)
+            {
+                return;
+            }
+
+            m_Closing = true;
             if (disposing)
             {
                 GC.SuppressFinalize(this);

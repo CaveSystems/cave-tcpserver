@@ -46,7 +46,7 @@
 
 using System;
 
-namespace Cave
+namespace Cave.Net
 {
     /// <summary>
     /// Provides <see cref="EventArgs"/> for <see cref="Exception"/>handling of background threads using an <see cref="EventHandler"/>

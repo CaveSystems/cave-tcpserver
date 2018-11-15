@@ -55,7 +55,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Cave
+namespace Cave.Net
 {
 	/// <summary>
 	/// Provides a fast TcpServer implementation
@@ -78,7 +78,10 @@ namespace Cave
         {
             foreach (TClient c in m_Clients.ToArray())
             {
-                if (!c.IsConnected) m_Clients.Remove(c);
+                if (!c.IsConnected)
+                {
+                    m_Clients.Remove(c);
+                }
             }
         }
 
@@ -89,7 +92,11 @@ namespace Cave
                 SocketAsyncEventArgs asyncAccept;
                 lock (m_AcceptPending)
                 {
-                    if (m_AcceptPending.Count >= AcceptThreads) return;
+                    if (m_AcceptPending.Count >= AcceptThreads)
+                    {
+                        return;
+                    }
+
                     asyncAccept = new SocketAsyncEventArgs();
                     m_AcceptPending.Add(asyncAccept);
                     Trace.TraceInformation("New async accept task. ({0}/{1})", m_AcceptPending.Count, m_AcceptThreads);
@@ -156,6 +163,9 @@ namespace Cave
 			}
         }
 
+        /// <summary>
+        /// Calls the <see cref="ClientException"/> event (if set).
+        /// </summary>
         protected virtual void OnClientException(TClient client, Exception ex)
         {
             CallEvent(ClientException, new TcpServerClientExceptionEventArgs<TClient>(client, ex));
@@ -185,7 +195,11 @@ namespace Cave
         /// <exception cref="System.ObjectDisposedException">TcpSocketServer</exception>
         public void Listen(IPEndPoint endPoint)
         {
-            if (m_Disposed) throw new ObjectDisposedException("TcpSocketServer");
+            if (m_Disposed)
+            {
+                throw new ObjectDisposedException("TcpSocketServer");
+            }
+
             m_Socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
             switch(endPoint.AddressFamily)
@@ -213,7 +227,11 @@ namespace Cave
         /// <exception cref="System.ObjectDisposedException">TcpSocketServer</exception>
         public void Listen(int port)
         {
-            if (m_Disposed) throw new ObjectDisposedException("TcpSocketServer");
+            if (m_Disposed)
+            {
+                throw new ObjectDisposedException("TcpSocketServer");
+            }
+
             var localAddresses = NetworkInterface.GetAllNetworkInterfaces().SelectMany(i => i.GetIPProperties().UnicastAddresses);
             bool useIPv6 = localAddresses.Any(i => i.Address.AddressFamily == AddressFamily.InterNetworkV6);
 			if (useIPv6)
@@ -274,7 +292,11 @@ namespace Cave
             get { return m_AcceptBacklog; }
             set
             {
-                if (m_Socket != null) throw new InvalidOperationException("Socket is already listening!");
+                if (m_Socket != null)
+                {
+                    throw new InvalidOperationException("Socket is already listening!");
+                }
+
                 m_AcceptBacklog = Math.Max(1, value);
             }
         }
@@ -287,7 +309,11 @@ namespace Cave
             get { return m_AcceptThreads; }
             set
             {
-                if (m_Socket != null) throw new InvalidOperationException("Socket is already listening!");
+                if (m_Socket != null)
+                {
+                    throw new InvalidOperationException("Socket is already listening!");
+                }
+
                 m_AcceptThreads = Math.Max(1, value);
             }
         }
@@ -301,8 +327,16 @@ namespace Cave
             get { return m_TcpBufferSize; }
             set
             {
-                if (m_Socket != null) throw new InvalidOperationException("Socket is already listening!");
-                if (value < 1) throw new ArgumentOutOfRangeException(nameof(value));
+                if (m_Socket != null)
+                {
+                    throw new InvalidOperationException("Socket is already listening!");
+                }
+
+                if (value < 1)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                }
+
                 m_TcpBufferSize = value;
             }
         }
@@ -336,7 +370,7 @@ namespace Cave
         public event EventHandler<TcpServerClientEventArgs<TClient>> ClientAccepted;
 
         /// <summary>
-        /// Event to be called after a client exception occured that cannot be handled by the client instance (<see cref="TClient.Error"/>)
+        /// Event to be called after a client exception occured that cannot be handled by the clients Error event.
         /// </summary>
         public event EventHandler<TcpServerClientExceptionEventArgs<TClient>> ClientException;
 

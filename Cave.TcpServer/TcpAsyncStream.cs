@@ -44,13 +44,13 @@
  */
 #endregion
 
+using Cave.IO;
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net.Sockets;
 using System.Threading;
 
-namespace Cave
+namespace Cave.Net
 {
     /// <summary>
     /// Provides a stream implementation for <see cref="TcpAsyncClient"/>

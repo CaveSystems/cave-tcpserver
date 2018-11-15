@@ -46,10 +46,10 @@
 
 using System;
 
-namespace Cave
+namespace Cave.Net
 {
     /// <summary>
-    /// Provides Event Arguments for the <see cref="TcpServer{TClient}.ClientError"/> event.
+    /// Provides Event Arguments for the <see cref="TcpServer{TClient}.ClientException"/> event.
     /// </summary>
     /// <typeparam name="TClient">The type of the client.</typeparam>
     /// <seealso cref="System.EventArgs" />

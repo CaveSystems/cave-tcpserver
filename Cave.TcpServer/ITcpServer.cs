@@ -48,7 +48,7 @@ using System;
 using System.Net;
 using System.Threading;
 
-namespace Cave
+namespace Cave.Net
 {
     /// <summary>
     /// Provides a TcpServer interface

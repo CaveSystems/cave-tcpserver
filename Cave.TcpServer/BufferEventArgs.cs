@@ -46,7 +46,7 @@
 
 using System;
 
-namespace Cave
+namespace Cave.Net
 {
     /// <summary>
     /// Provides buffer information
