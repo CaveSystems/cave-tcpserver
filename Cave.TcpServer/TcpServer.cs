@@ -65,8 +65,14 @@ namespace Cave.Net
 	[ComVisible(false)]
     public class TcpServer<TClient> : EventBase, ITcpServer where TClient : TcpAsyncClient, new()
     {
+#if NETSTANDARD13 || NET20
+        readonly List<SocketAsyncEventArgs> m_AcceptPending = new List<SocketAsyncEventArgs>();
+        readonly List<TClient> m_Clients = new List<TClient>();
+#else
         readonly HashSet<SocketAsyncEventArgs> m_AcceptPending = new HashSet<SocketAsyncEventArgs>();
         readonly HashSet<TClient> m_Clients = new HashSet<TClient>();
+#endif
+
         Socket m_Socket;
         int m_AcceptBacklog = 20;
         int m_AcceptThreads = 2;
@@ -99,7 +105,6 @@ namespace Cave.Net
 
                     asyncAccept = new SocketAsyncEventArgs();
                     m_AcceptPending.Add(asyncAccept);
-                    Trace.TraceInformation("New async accept task. ({0}/{1})", m_AcceptPending.Count, m_AcceptThreads);
                 }
 
                 //accept async or sync, call AcceptCompleted in any case
@@ -141,7 +146,12 @@ namespace Cave.Net
                     }
                     catch (Exception ex)
                     {
-                        try { socket.Close(); } catch { }
+#if NETSTANDARD13
+                        socket.Dispose();
+#else
+                        socket.Close();
+#endif
+                        socket = null;
                         OnClientException(client, ex);
                         break;
                     }
@@ -213,11 +223,9 @@ namespace Cave.Net
             }
 
             //m_Socket.UseOnlyOverlappedIO = true;
-            Trace.TraceInformation("Start listening at <cyan>{0}<default>.", endPoint);
             m_Socket.Bind(endPoint);
             m_Socket.Listen(AcceptBacklog);
 			LocalEndPoint = (IPEndPoint)m_Socket.LocalEndPoint;
-            Trace.TraceInformation("Listening using {0} asynchronous accept calls and a backlog of {1} connections.", AcceptThreads, AcceptBacklog);
             AcceptStart();
         }
 
@@ -231,24 +239,24 @@ namespace Cave.Net
             {
                 throw new ObjectDisposedException("TcpSocketServer");
             }
-
-            var localAddresses = NetworkInterface.GetAllNetworkInterfaces().SelectMany(i => i.GetIPProperties().UnicastAddresses);
-            bool useIPv6 = localAddresses.Any(i => i.Address.AddressFamily == AddressFamily.InterNetworkV6);
+#if NETSTANDARD13
+            Listen(new IPEndPoint(IPAddress.Any, port));
+#else
+            bool useIPv6 = NetworkInterface.GetAllNetworkInterfaces().Any(n => n.GetIPProperties().UnicastAddresses.Any(u => u.Address.AddressFamily == AddressFamily.InterNetworkV6));
 			if (useIPv6)
 			{
-				Trace.TraceInformation("<green>IPv6 <default>usage detected, trying to open socket for IPv4 and IPv6...");
                 Listen(new IPEndPoint(IPAddress.IPv6Any, port));
             }
 			else
 			{
                 Listen(new IPEndPoint(IPAddress.Any, port));
             }
+#endif
         }
 
 		/// <summary>Disconnects all clients.</summary>
 		public void DisconnectAllClients()
 		{
-            Trace.TraceInformation("Disconnect all clients.");
 			lock (m_Clients)
 			{
 				foreach (TClient c in m_Clients)
@@ -263,7 +271,6 @@ namespace Cave.Net
         public void Close()
         {
 			m_Shutdown = true;
-            Trace.TraceInformation("Shutdown server.");
 			lock (m_AcceptPending)
             {
                 foreach (SocketAsyncEventArgs e in m_AcceptPending)
@@ -274,7 +281,11 @@ namespace Cave.Net
 
 				if (m_Socket != null)
 				{
-					try { m_Socket.Close(); } catch { }
+#if NETSTANDARD13
+                    m_Socket.Dispose();
+#else
+                    m_Socket.Close();
+#endif
 					m_Socket = null;
 				}
 			}
@@ -388,7 +399,7 @@ namespace Cave.Net
             }
         }
 
-        #region IDisposable Support
+#region IDisposable Support
         bool m_Disposed = false;
 
         /// <summary>Releases the unmanaged resources used by this instance and optionally releases the managed resources.</summary>
@@ -412,14 +423,14 @@ namespace Cave.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-        #endregion
+#endregion
     }
 
     /// <summary>
     /// Provides a fast TcpServer implementation using the default TcpServerClient class.
     /// For own client implementations use <see cref="TcpServer{TcpServerClient}"/>
     /// </summary>
-    /// <seealso cref="Cave.EventBase" />
+    /// <seealso cref="EventBase" />
     /// <seealso cref="System.IDisposable" />
     [ComVisible(false)]
     public class TcpServer : TcpServer<TcpAsyncClient>

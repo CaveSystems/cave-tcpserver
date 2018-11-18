@@ -83,7 +83,6 @@ namespace Cave.Net
             }
             catch (Exception ex)
             {
-                Trace.TraceError("Error_CallingEvent {0} {1}", callback, args);
                 if (!callback.Equals(Error))
                 {
                     OnError(new ExceptionEventArgs(ex));
@@ -97,7 +96,6 @@ namespace Cave.Net
         /// <param name="e"></param>
         protected virtual void OnError(ExceptionEventArgs e)
         {
-            Trace.TraceError(e.Exception.ToString());
             CallEvent(Error, e);
         }
 

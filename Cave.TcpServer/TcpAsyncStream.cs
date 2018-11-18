@@ -128,7 +128,6 @@ namespace Cave.Net
         /// <returns></returns>
         public override int Read(byte[] array, int offset, int count)
         {
-            bool blockMessageSent = false;
             DateTime timeout = m_Client.ReceiveTimeout > 0 ? DateTime.UtcNow + TimeSpan.FromMilliseconds(m_Client.ReceiveTimeout) : DateTime.MaxValue;
             FifoStream buffer = m_Client.ReceiveBuffer;
             lock (buffer)
@@ -138,11 +137,6 @@ namespace Cave.Net
                     if (m_Exit) { return 0; }
                     if (!m_Client.IsConnected) { throw new EndOfStreamException(); }
                     if (buffer.Available > 0) { break; }
-                    if (!blockMessageSent)
-                    {
-                        Trace.TraceWarning("Blocking thread and waiting for incoming data ({0}/{1} bytes)", count, buffer.Available);
-                        blockMessageSent = true;
-                    }
                     int waitTime = (int)Math.Min(1000, (timeout - DateTime.UtcNow).Ticks / TimeSpan.TicksPerMillisecond);
                     if (waitTime <= 0) { throw new TimeoutException(); }
                     Monitor.Wait(buffer, waitTime);
@@ -183,6 +177,19 @@ namespace Cave.Net
             m_Client.Send(buffer, offset, count);
         }
 
+#if NETSTANDARD13
+        /// <summary>
+        /// Closes the tcp connection
+        /// </summary>
+        public virtual void Close()
+        {
+            if (!m_Exit)
+            {
+                if (m_Client.IsConnected) { m_Client.Close(); }
+                m_Exit = true;
+            }
+        }
+#else
         /// <summary>
         /// Closes the tcp connection
         /// </summary>
@@ -195,5 +202,6 @@ namespace Cave.Net
                 m_Exit = true;
             }
         }
+#endif
     }
 }
