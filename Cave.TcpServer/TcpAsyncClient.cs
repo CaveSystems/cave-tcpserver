@@ -50,8 +50,10 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Threading.Tasks;
 using Cave.IO;
+#if NETSTANDARD13 || NETSTANDARD20 || NET45 || NET46 || NET47
+using System.Threading.Tasks;
+#endif
 
 namespace Cave.Net
 {
@@ -226,10 +228,17 @@ namespace Cave.Net
             socketAsync.SetBuffer(buffer, 0, buffer.Length);
             if (!Socket.ReceiveAsync(socketAsync))
             {
+#if NET20 || NET35
+                ThreadPool.QueueUserWorkItem(delegate
+                {
+                    ReadCompleted(this, socketAsync);
+                });
+#else
                 Task.Factory.StartNew(delegate
                 {
                     ReadCompleted(this, socketAsync);
                 });
+#endif
             }
         }
 

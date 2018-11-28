@@ -11,19 +11,19 @@
     <PackageLicenseUrl>https://www.gnu.org/licenses/lgpl-3.0.en.html</PackageLicenseUrl>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>cave-tcpserver.snk</AssemblyOriginatorKeyFile>
-    <Version>1.0.0-alpha-$(Configuration.ToLower())-3</Version>
+    <Version>1.0.0-alpha-$(Configuration.ToLower())-4</Version>
     <PackageIconUrl>https://www.cavesystems.de/favicon.ico</PackageIconUrl>
     <PackageTags>CaveSystems TcpServer TcpAsyncClient</PackageTags>
     <PackageProjectUrl>https://www.cavesystems.de</PackageProjectUrl>
     <Description>Provides a high performance async tcp client and server implementation</Description>
     <PackageProjectUrl>https://github.com/Dingsd4/cave-tcpserver</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/Dingsd4/cave-tcpserver</RepositoryUrl>
+    <RepositoryUrl>https://github.com/CaveSystems/cave-tcpserver</RepositoryUrl>
     <PackageReleaseNotes />
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyVersion>1.0.0.3</AssemblyVersion>
-    <FileVersion>2018.1118.2005.1129</FileVersion>
+    <AssemblyVersion>1.0.0.4</AssemblyVersion>
+    <FileVersion>2018.1128.2105.2995</FileVersion>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
     <NeutralLanguage />
     <DelaySign>false</DelaySign>
