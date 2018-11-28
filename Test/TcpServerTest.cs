@@ -1,8 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Linq;
 using System.Net;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Cave.Net;
@@ -16,8 +15,8 @@ namespace Test
         [TestMethod]
         public void TestAccept()
         {
-            var id = "T" + MethodBase.GetCurrentMethod().GetHashCode().ToString("x4");
-            int port = 2048 + id.Last();
+            var id = nameof(TestAccept);
+            int port = 2048 + id.GetHashCode() % 1024;
 
             TcpServer server = new TcpServer();
             server.AcceptThreads = 10;
@@ -64,8 +63,8 @@ namespace Test
         [TestMethod]
         public void TestSend()
         {
-            var id = "T" + MethodBase.GetCurrentMethod().GetHashCode().ToString("x4");
-            int port = 2048 + id.Last();
+            var id = nameof(TestSend);
+            int port = 2048 + id.GetHashCode() % 1024;
 
             TcpServer server = new TcpServer();
             server.Listen(port);
@@ -101,6 +100,102 @@ namespace Test
             Console.WriteLine($"Test : info {id}: {bytes.ToString("N")} bytes in {watch.Elapsed}");
             double bps = Math.Round(bytes / watch.Elapsed.TotalSeconds, 2);
             Console.WriteLine($"Test : info {id}: {bps.ToString("N")} bytes/s");
+        }
+
+        [TestMethod]
+        public void TestDisconnectAsync()
+        {
+            int serverClientConnectedEventCount = 0;
+            int serverClientDisconnectedEventCount = 0;
+            int clientConnectedEventCount = 0;
+            int clientDisconnectedEventCount = 0;
+
+            var id = nameof(TestDisconnectAsync);
+            int port = 2048 + id.GetHashCode() % 1024;
+
+            TcpServer server = new TcpServer();
+            server.Listen(port);
+            server.ClientAccepted += (s1, e1) =>
+            {
+                e1.Client.Connected += (s2, e2) =>
+                {
+                    Interlocked.Increment(ref serverClientConnectedEventCount);
+                };
+                e1.Client.Disconnected += (s2, e2) =>
+                {
+                    Interlocked.Increment(ref serverClientDisconnectedEventCount);
+                };
+            };
+            Console.WriteLine($"Test : info {id}: Opened Server at port {port}.");
+
+            ConcurrentBag<TcpAsyncClient> clients = new ConcurrentBag<TcpAsyncClient>();
+            var ip = IPAddress.Parse("127.0.0.1");
+            Parallel.For(0, 1000, new ParallelOptions() { MaxDegreeOfParallelism = 10 }, (n) =>
+            {
+                var client = new TcpAsyncClient();
+                client.Connected += (s1, e1) =>
+                {
+                    Interlocked.Increment(ref clientConnectedEventCount);
+                };
+                client.Disconnected += (s1, e1) =>
+                {
+                    Interlocked.Increment(ref clientDisconnectedEventCount);
+                };
+                client.Connect(ip, port);
+                clients.Add(client);
+            });
+            //all clients connected
+            Assert.AreEqual(1000, clientConnectedEventCount);
+            //no client disconnected
+            Assert.AreEqual(0, clientDisconnectedEventCount);
+
+            Console.WriteLine($"Test : info {id}: ConnectedEventCount ok.");
+
+            //give the server some more time
+            Task.Delay(2000).Wait();
+
+            //all clients connected
+            Assert.AreEqual(clientConnectedEventCount, serverClientConnectedEventCount);
+            Assert.AreEqual(1000, server.Clients.Length);
+            //no client disconnected
+            Assert.AreEqual(0, clientDisconnectedEventCount);
+            Assert.AreEqual(clientDisconnectedEventCount, serverClientDisconnectedEventCount);
+
+            Console.WriteLine($"Test : info {id}: DisconnectedEventCount ({clientDisconnectedEventCount}) ok.");
+
+            //disconnect some
+            int i = 0, disconnected = 0;
+            foreach(var client in clients)
+            {
+                if (i++ % 3 == 0)
+                {
+                    disconnected++;
+                    client.Close();
+                }
+            }
+
+            Assert.AreEqual(disconnected, clientDisconnectedEventCount);
+
+            //give the server some more time
+            Task.Delay(2000).Wait();
+
+            Assert.AreEqual(clientDisconnectedEventCount, serverClientDisconnectedEventCount);
+            Assert.AreEqual(clientConnectedEventCount - disconnected, server.Clients.Length);
+
+            Console.WriteLine($"Test : info {id}: DisconnectedEventCount ({clientDisconnectedEventCount}) ok.");
+
+            foreach (var client in clients)
+            {
+                client.Dispose();
+            }
+            Assert.AreEqual(clientConnectedEventCount, serverClientConnectedEventCount);
+
+            //give the server some more time
+            Task.Delay(2000).Wait();
+
+            Assert.AreEqual(clientDisconnectedEventCount, serverClientDisconnectedEventCount);
+
+            Console.WriteLine($"Test : info {id}: DisconnectedEventCount ({clientDisconnectedEventCount}) ok.");
         }
     }
 }

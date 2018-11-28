@@ -1,6 +1,7 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Test
 {
@@ -25,11 +26,19 @@ namespace Test
                     catch (Exception ex)
                     {
                         Console.WriteLine($"Test : error T0002: {ex}");
+                        if (Debugger.IsAttached) WaitExit();
                         return 1;
                     }
                 }
             }
+            if (Debugger.IsAttached) WaitExit();
             return 0;
+        }
+
+        static void WaitExit()
+        {
+            Console.Write("--- press enter to exit ---");
+            while (Console.ReadKey(true).Key != ConsoleKey.Enter) ;
         }
     }
 }

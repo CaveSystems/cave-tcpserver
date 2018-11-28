@@ -46,65 +46,64 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Cave.Net
 {
-	/// <summary>
-	/// Provides a fast TcpServer implementation
-	/// </summary>
-	/// <typeparam name="TClient">The type of the client.</typeparam>
-	/// <seealso cref="IDisposable" />
-	[ComVisible(false)]
-    public class TcpServer<TClient> : EventBase, ITcpServer where TClient : TcpAsyncClient, new()
+    /// <summary>
+    /// Provides a fast TcpServer implementation
+    /// </summary>
+    /// <typeparam name="TClient">The type of the client.</typeparam>
+    /// <seealso cref="IDisposable" />
+    [ComVisible(false)]
+    public class TcpServer<TClient> : ITcpServer where TClient : TcpAsyncClient, new()
     {
 #if NETSTANDARD13 || NET20
-        readonly List<SocketAsyncEventArgs> m_AcceptPending = new List<SocketAsyncEventArgs>();
-        readonly List<TClient> m_Clients = new List<TClient>();
+        readonly Dictionary<SocketAsyncEventArgs, SocketAsyncEventArgs> m_PendingAccepts = new Dictionary<SocketAsyncEventArgs, SocketAsyncEventArgs>();
+        readonly Dictionary<TClient, TClient> m_Clients = new Dictionary<TClient, TClient>();
+
+        void AddPendingAccept(SocketAsyncEventArgs e) => m_PendingAccepts.Add(e, e);
+        void AddClient(TClient client) => m_Clients.Add(client, client);
+        void RemoveClient(TClient client) { if (m_Clients.ContainsKey(client)) { m_Clients.Remove(client); } }
+        IEnumerable<TClient> ClientList => m_Clients.Keys;
+        IEnumerable<SocketAsyncEventArgs> PendingAcceptList => m_PendingAccepts.Keys;
 #else
-        readonly HashSet<SocketAsyncEventArgs> m_AcceptPending = new HashSet<SocketAsyncEventArgs>();
+        readonly HashSet<SocketAsyncEventArgs> m_PendingAccepts = new HashSet<SocketAsyncEventArgs>();
         readonly HashSet<TClient> m_Clients = new HashSet<TClient>();
+
+        void AddPendingAccept(SocketAsyncEventArgs e) => m_PendingAccepts.Add(e);
+        void AddClient(TClient client) => m_Clients.Add(client);
+        void RemoveClient(TClient client) { if (m_Clients.Contains(client)) { m_Clients.Remove(client); } }
+        IEnumerable<TClient> ClientList => m_Clients;
+        IEnumerable<SocketAsyncEventArgs> PendingAcceptList => m_PendingAccepts;
 #endif
 
         Socket m_Socket;
         int m_AcceptBacklog = 20;
         int m_AcceptThreads = 2;
         int m_TcpBufferSize = 64 * 1024;
-		bool m_Shutdown;
+        bool m_Shutdown;
         int m_AcceptWaiting;
-
-        void ClientsCleanup()
-        {
-            foreach (TClient c in m_Clients.ToArray())
-            {
-                if (!c.IsConnected)
-                {
-                    m_Clients.Remove(c);
-                }
-            }
-        }
 
         void AcceptStart()
         {
             while (true)
             {
                 SocketAsyncEventArgs asyncAccept;
-                lock (m_AcceptPending)
+                lock (m_PendingAccepts)
                 {
-                    if (m_AcceptPending.Count >= AcceptThreads)
+                    if (m_PendingAccepts.Count >= AcceptThreads)
                     {
                         return;
                     }
 
                     asyncAccept = new SocketAsyncEventArgs();
-                    m_AcceptPending.Add(asyncAccept);
+                    AddPendingAccept(asyncAccept);
                 }
 
                 //accept async or sync, call AcceptCompleted in any case
@@ -112,10 +111,17 @@ namespace Cave.Net
                 asyncAccept.Completed += AcceptCompleted;
                 if (!m_Socket.AcceptAsync(asyncAccept))
                 {
-                    Task.Factory.StartNew(delegate
+#if NET20 || NET35
+                    ThreadPool.QueueUserWorkItem(delegate
                     {
                         AcceptCompleted(this, asyncAccept);
                     });
+#else
+                    System.Threading.Tasks.Task.Factory.StartNew(delegate
+                    {
+                        AcceptCompleted(this, asyncAccept);
+                    });
+#endif
                 }
             }
         }
@@ -135,14 +141,17 @@ namespace Cave.Net
                 {
                     //create client
                     TClient client = new TClient();
+                    client.Disconnected += this.ClientDisconnected;
                     try
                     {
                         //add to my client list
-                        lock (m_Clients) { m_Clients.Add(client); }
-                        client.Initialize(this, socket, BufferSize);
+                        lock (m_Clients) { AddClient(client); }
+                        //initialize client instance with server and socket
+                        client.InitializeServer(this, socket);
                         //call client accepted event
                         OnClientAccepted(client);
-                        lock (m_Clients) { ClientsCleanup(); }
+                        //start processing of incoming data
+                        client.StartReader(BufferSize);
                     }
                     catch (Exception ex)
                     {
@@ -159,18 +168,28 @@ namespace Cave.Net
                 }
             }
             //start next socket accept
-			if (!m_Shutdown)
-			{
+            if (!m_Shutdown)
+            {
                 //accept next
                 Interlocked.Increment(ref m_AcceptWaiting);
                 e.AcceptSocket = null;
-				if (!m_Socket.AcceptAsync(e))
-				{
-					//AcceptCompleted(this, e);
-					goto AcceptCompletedBegin;
-					//we could do a function call to myself here but with slow OnClientAccepted() functions and fast networks we might get a stack overflow caused by infinite recursion
-				}
-			}
+                if (!m_Socket.AcceptAsync(e))
+                {
+                    //AcceptCompleted(this, e);
+                    goto AcceptCompletedBegin;
+                    //we could do a function call to myself here but with slow OnClientAccepted() functions and fast networks we might get a stack overflow caused by infinite recursion
+                }
+            }
+        }
+
+        void ClientDisconnected(object sender, EventArgs e)
+        {
+            //perform cleanup of client list
+            TClient client = (TClient)sender;
+            lock (m_Clients)
+            {
+                RemoveClient(client);
+            }
         }
 
         /// <summary>
@@ -178,7 +197,7 @@ namespace Cave.Net
         /// </summary>
         protected virtual void OnClientException(TClient client, Exception ex)
         {
-            CallEvent(ClientException, new TcpServerClientExceptionEventArgs<TClient>(client, ex));
+            ClientException?.Invoke(this, new TcpServerClientExceptionEventArgs<TClient>(client, ex));
         }
 
         /// <summary>
@@ -186,16 +205,16 @@ namespace Cave.Net
         /// </summary>
         protected virtual void OnAcceptTasksBusy()
         {
-            CallEvent(AcceptTasksBusy, new EventArgs());
+            AcceptTasksBusy?.Invoke(this, new EventArgs());
         }
 
         /// <summary>
         /// Calls the <see cref="ClientAccepted"/> event (if set).
         /// </summary>
         protected virtual void OnClientAccepted(TClient client)
-		{
-            CallEvent(ClientAccepted, new TcpServerClientEventArgs<TClient>(client));
-		}
+        {
+            ClientAccepted?.Invoke(this, new TcpServerClientEventArgs<TClient>(client));
+        }
 
         /// <summary>Initializes a new instance of the <see cref="TcpServer{TClient}"/> class.</summary>
         public TcpServer() { }
@@ -212,7 +231,7 @@ namespace Cave.Net
 
             m_Socket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
-            switch(endPoint.AddressFamily)
+            switch (endPoint.AddressFamily)
             {
                 case AddressFamily.InterNetwork:
                     break;
@@ -225,7 +244,7 @@ namespace Cave.Net
             //m_Socket.UseOnlyOverlappedIO = true;
             m_Socket.Bind(endPoint);
             m_Socket.Listen(AcceptBacklog);
-			LocalEndPoint = (IPEndPoint)m_Socket.LocalEndPoint;
+            LocalEndPoint = (IPEndPoint)m_Socket.LocalEndPoint;
             AcceptStart();
         }
 
@@ -243,55 +262,55 @@ namespace Cave.Net
             Listen(new IPEndPoint(IPAddress.Any, port));
 #else
             bool useIPv6 = NetworkInterface.GetAllNetworkInterfaces().Any(n => n.GetIPProperties().UnicastAddresses.Any(u => u.Address.AddressFamily == AddressFamily.InterNetworkV6));
-			if (useIPv6)
-			{
+            if (useIPv6)
+            {
                 Listen(new IPEndPoint(IPAddress.IPv6Any, port));
             }
-			else
-			{
+            else
+            {
                 Listen(new IPEndPoint(IPAddress.Any, port));
             }
 #endif
         }
 
-		/// <summary>Disconnects all clients.</summary>
-		public void DisconnectAllClients()
-		{
-			lock (m_Clients)
-			{
-				foreach (TClient c in m_Clients)
-				{
-					c.Dispose();
-				}
-				m_Clients.Clear();
-			}
-		}
+        /// <summary>Disconnects all clients.</summary>
+        public void DisconnectAllClients()
+        {
+            lock (m_Clients)
+            {
+                foreach (TClient c in ClientList)
+                {
+                    c.Dispose();
+                }
+                m_Clients.Clear();
+            }
+        }
 
         /// <summary>Closes this instance.</summary>
         public void Close()
         {
-			m_Shutdown = true;
-			lock (m_AcceptPending)
+            m_Shutdown = true;
+            lock (m_PendingAccepts)
             {
-                foreach (SocketAsyncEventArgs e in m_AcceptPending)
+                foreach (SocketAsyncEventArgs e in PendingAcceptList)
                 {
                     e.Dispose();
                 }
-                m_AcceptPending.Clear();
+                m_PendingAccepts.Clear();
 
-				if (m_Socket != null)
-				{
+                if (m_Socket != null)
+                {
 #if NETSTANDARD13
                     m_Socket.Dispose();
 #else
                     m_Socket.Close();
 #endif
-					m_Socket = null;
-				}
-			}
+                    m_Socket = null;
+                }
+            }
 
             DisconnectAllClients();
-			Dispose();
+            Dispose();
         }
 
         /// <summary>Gets or sets the maximum number of pending connections.</summary>
@@ -352,17 +371,17 @@ namespace Cave.Net
             }
         }
 
-		/// <summary>Gets or sets the amount of time, in milliseconds, thata read operation blocks waiting for data.</summary>
-		/// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a read operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the read operation does not time out.</value>
-		public int ReceiveTimeout { get; set; } = Timeout.Infinite;
+        /// <summary>Gets or sets the amount of time, in milliseconds, thata read operation blocks waiting for data.</summary>
+        /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a read operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the read operation does not time out.</value>
+        public int ReceiveTimeout { get; set; } = Timeout.Infinite;
 
         /// <summary>Gets or sets the amount of time, in milliseconds, thata write operation blocks waiting for data.</summary>
         /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a write operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the write operation does not time out.</value>
         public int SendTimeout { get; set; } = Timeout.Infinite;
 
-		/// <summary>Gets the local end point.</summary>
-		/// <value>The local end point.</value>
-		public IPEndPoint LocalEndPoint { get; private set; }
+        /// <summary>Gets the local end point.</summary>
+        /// <value>The local end point.</value>
+        public IPEndPoint LocalEndPoint { get; private set; }
 
         /// <summary>Gets a value indicating whether this instance is listening.</summary>
         /// <value>
@@ -393,8 +412,7 @@ namespace Cave.Net
             {
                 lock (m_Clients)
                 {
-                    ClientsCleanup();
-                    return m_Clients.ToArray();
+                    return ClientList.ToArray();
                 }
             }
         }
@@ -424,14 +442,22 @@ namespace Cave.Net
             GC.SuppressFinalize(this);
         }
 #endregion
+
+        /// <summary>
+        /// Returns a string that represents the current object.
+        /// </summary>
+        /// <returns>tcp://localip:port</returns>
+        public override string ToString()
+        {
+            return $"tcp://{LocalEndPoint}";
+        }
     }
 
     /// <summary>
     /// Provides a fast TcpServer implementation using the default TcpServerClient class.
     /// For own client implementations use <see cref="TcpServer{TcpServerClient}"/>
     /// </summary>
-    /// <seealso cref="EventBase" />
-    /// <seealso cref="System.IDisposable" />
+    /// <seealso cref="IDisposable" />
     [ComVisible(false)]
     public class TcpServer : TcpServer<TcpAsyncClient>
     { }

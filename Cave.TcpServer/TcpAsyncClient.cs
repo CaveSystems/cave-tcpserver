@@ -44,37 +44,71 @@
  */
 #endregion
 
-using Cave.IO;
 using System;
-using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Cave.IO;
 
 namespace Cave.Net
 {
     /// <summary>
     /// Provides an async tcp client implementation
     /// </summary>
-    public class TcpAsyncClient : EventBase, IDisposable
+    [DebuggerDisplay("{RemoteEndPoint}")]
+    public class TcpAsyncClient : IDisposable
     {
         #region private class
-        volatile bool m_Closing;
-        long m_BytesReceived;
-        long m_BytesSent;
-        SocketAsyncEventArgs m_SocketAsync;
-        int m_ReceiveTimeout = Timeout.Infinite;
-        int m_SendTimeout = Timeout.Infinite;
+        bool connectedEventTriggered;
+        bool closing;
+        bool initialized;
+        bool disconnectedEventTriggered;
+        long bytesReceived;
+        long bytesSent;
+        SocketAsyncEventArgs socketAsync;
+
+        /// <summary>Provides access to the TCP socket.</summary>
+        /// <value>The TCP socket instance.</value>
+        Socket socket;
+
+        Socket Socket
+        {
+            get
+            {
+                if (socket == null)
+                {
+                    if (closing) throw new ObjectDisposedException(nameof(TcpAsyncClient));
+#if NETSTANDARD13
+                    socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+                    {
+                        ExclusiveAddressUse = false
+                    };
+#elif NET20 || NET35
+                    socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+                    {
+                        ExclusiveAddressUse = false
+                    };
+#else
+                    socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
+                    {
+                        ExclusiveAddressUse = false
+                    };
+#endif
+                }
+                return socket;
+            }
+        }
 
         /// <summary>Gets called whenever a read is completed.</summary>
         /// <param name="sender">The sender.</param>
         /// <param name="e">The <see cref="SocketAsyncEventArgs"/> instance containing the event data.</param>
         void ReadCompleted(object sender, SocketAsyncEventArgs e)
         {
-        ReadCompletedBegin:
-            if (m_Closing)
+            ReadCompletedBegin:
+            if (closing)
             {
                 return;
             }
@@ -88,7 +122,7 @@ namespace Cave.Net
                     Close();
                     return;
                 default:
-                    OnError(new ExceptionEventArgs(new SocketException((int)e.SocketError)));
+                    OnError(new SocketException((int)e.SocketError));
                     Dispose();
                     return;
             }
@@ -98,10 +132,10 @@ namespace Cave.Net
                 //got data (if not this is the disconnected call)
                 if (bytesTransferred > 0)
                 {
-                    Interlocked.Add(ref m_BytesReceived, bytesTransferred);
+                    Interlocked.Add(ref bytesReceived, bytesTransferred);
                     //call event
                     var bufferEventArgs = new BufferEventArgs(e.Buffer, e.Offset, bytesTransferred);
-                    OnReceived(bufferEventArgs);
+                    OnReceived(e.Buffer, e.Offset, bytesTransferred);
                     if (!bufferEventArgs.Handled)
                     {
                         //cleanup read buffers and add new data
@@ -109,7 +143,7 @@ namespace Cave.Net
                         {
                             ReceiveBuffer?.FreeBuffers();
                             ReceiveBuffer?.AppendBuffer(e.Buffer, e.Offset, bytesTransferred);
-                            OnBuffered(new EventArgs());
+                            OnBuffered();
                             Monitor.PulseAll(ReceiveBuffer);
                         }
                     }
@@ -117,9 +151,9 @@ namespace Cave.Net
                     if (IsConnected)
                     {
                         //yes read again
-                        if (!Socket.ReceiveAsync(m_SocketAsync))
+                        if (!Socket.ReceiveAsync(socketAsync))
                         {
-                            e = m_SocketAsync;
+                            e = socketAsync;
                             goto ReadCompletedBegin;
                             //we could do a function call to myself here but with slow OnReceived() functions and fast networks we might get a stack overflow caused by infinite recursion
                             //spawning threads using the threadpool is not a good idea either, because multiple receives will mess up our (sequential) stream reading.
@@ -127,11 +161,11 @@ namespace Cave.Net
                         return;
                     }
                 }
-                OnDisconnect(new EventArgs());
+                OnDisconnect();
             }
             catch (Exception ex)
             {
-                OnError(new ExceptionEventArgs(ex));
+                OnError(ex);
             }
 #if NETSTANDARD13
             Socket?.Dispose();
@@ -139,48 +173,66 @@ namespace Cave.Net
             Socket?.Close();
 #endif
         }
+
+        void InitializeClient()
+        {
+            if (initialized)
+            {
+                throw new InvalidOperationException("Already initialized!");
+            }
+            RemoteEndPoint = (IPEndPoint)Socket.RemoteEndPoint;
+            LocalEndPoint = (IPEndPoint)Socket.LocalEndPoint;
+            Stream = new TcpAsyncStream(this);
+            initialized = true;
+        }
+
         #endregion
 
         #region internal functions used by TcpSocketServer
 
         /// <summary>
         /// Initializes the client.
-        /// Calls the <see cref="OnConnect(EventArgs)"/> function and starts the async socket reader.
         /// </summary>
         /// <exception cref="InvalidOperationException">Reader already started!</exception>
-        internal void Initialize(ITcpServer server, Socket socket, int bufferSize)
+        internal void InitializeServer(ITcpServer server, Socket socket)
         {
-            if (Socket != null) { throw new InvalidOperationException("Already initialized!"); }
-            if (socket == null) { throw new ArgumentNullException("socket"); }
-
-            RemoteEndPoint = (IPEndPoint)socket.RemoteEndPoint;
-            LocalEndPoint = (IPEndPoint)socket.LocalEndPoint;
-
-            Server = server;
-            Socket = socket;
-            Socket.ReceiveTimeout = ReceiveTimeout;
-            Socket.SendTimeout = SendTimeout;
-
-            Stream = new TcpAsyncStream(this)
+            if (initialized)
             {
-                ReadTimeout = ReceiveTimeout,
-                WriteTimeout = SendTimeout
-            };
+                throw new InvalidOperationException("Already initialized!");
+            }
+            Server = server ?? throw new ArgumentNullException(nameof(server));
+            this.socket = socket ?? throw new ArgumentNullException(nameof(socket));
+            if (server != null)
+            {
+                socket.ReceiveTimeout = server.ReceiveTimeout;
+                socket.SendTimeout = server.SendTimeout;
+            }
+            InitializeClient();
+        }
 
-            OnConnect(new EventArgs());
-            if (m_SocketAsync != null) { throw new InvalidOperationException("Reader already started!"); }
+        /// <summary>
+        /// Calls the <see cref="OnConnect()"/> function and starts the async socket reader.
+        /// </summary>
+        /// <param name="bufferSize"></param>
+        internal void StartReader(int bufferSize)
+        {
+            if (socketAsync != null) { throw new InvalidOperationException("Reader already started!"); }
+            OnConnect();
+            Socket.SendBufferSize = bufferSize;
+            Socket.SendBufferSize = bufferSize;
             byte[] buffer = new byte[bufferSize];
-            m_SocketAsync = new SocketAsyncEventArgs() { UserToken = this, };
-            m_SocketAsync.Completed += ReadCompleted;
-            m_SocketAsync.SetBuffer(buffer, 0, buffer.Length);
-            if (!Socket.ReceiveAsync(m_SocketAsync))
+            socketAsync = new SocketAsyncEventArgs() { UserToken = this, };
+            socketAsync.Completed += ReadCompleted;
+            socketAsync.SetBuffer(buffer, 0, buffer.Length);
+            if (!Socket.ReceiveAsync(socketAsync))
             {
                 Task.Factory.StartNew(delegate
                 {
-                    ReadCompleted(this, m_SocketAsync);
+                    ReadCompleted(this, socketAsync);
                 });
             }
         }
+
         #endregion
 
         #region events
@@ -188,43 +240,49 @@ namespace Cave.Net
         /// <summary>
         /// Calls the <see cref="Connected"/> event (if set).
         /// </summary>
-        protected virtual void OnConnect(EventArgs e)
+        protected virtual void OnConnect()
         {
-            CallEvent(Connected, e, true);
+            if (connectedEventTriggered) throw new InvalidOperationException("OnConnect triggered twice!");
+            connectedEventTriggered = true;
+            Connected?.Invoke(this, new EventArgs());
         }
 
         /// <summary>
         /// Calls the <see cref="Disconnected"/> event (if set).
         /// </summary>
-        protected virtual void OnDisconnect(EventArgs e)
+        protected virtual void OnDisconnect()
         {
-            CallEvent(Disconnected, e, true);
+            if (connectedEventTriggered && !disconnectedEventTriggered)
+            {
+                disconnectedEventTriggered = true;
+                Disconnected?.Invoke(this, new EventArgs());
+            }
         }
 
         /// <summary>
         /// Calls the <see cref="Received"/> event (if set).
         /// </summary>
-        protected virtual void OnReceived(BufferEventArgs e)
+        protected virtual void OnReceived(byte[] buffer, int offset, int length)
         {
-            CallEvent(Received, e);
+            Received?.Invoke(this, new BufferEventArgs(buffer, offset, length));
         }
 
         /// <summary>
         /// Calls the <see cref="Buffered"/> event (if set).
         /// </summary>
-        protected virtual void OnBuffered(EventArgs e)
+        protected virtual void OnBuffered()
         {
-            CallEvent(Buffered, e);
+            Buffered?.Invoke(this, new EventArgs());
         }
 
-        /// <summary>Closes the connection and calls the Error event (if set).</summary>
-        /// <param name="e"></param>
-        protected override void OnError(ExceptionEventArgs e)
+        /// <summary>Calls the Error event (if set) and closes the connection.</summary>
+        /// <param name="ex">The exception (in most cases this will be a <see cref="SocketException"/></param>
+        protected virtual void OnError(Exception ex)
         {
-            if (!m_Closing)
+            if (!closing)
             {
+                Error?.Invoke(this, new ExceptionEventArgs(ex));
                 Close();
-                base.OnError(e);
             }
         }
 
@@ -248,34 +306,42 @@ namespace Cave.Net
         /// </summary>
         public event EventHandler<EventArgs> Buffered;
 
+        /// <summary>
+        /// Event to be called after an error was encountered
+        /// </summary>
+        public event EventHandler<ExceptionEventArgs> Error;
+
         #endregion
 
         #region public functions
 
 
 #if NETSTANDARD13
-        void Connect(Socket socket, int bufferSize, Task task)
+        void Connect(int bufferSize, Task task)
         {
             task.Wait(ConnectTimeout);
             if (task.IsFaulted) throw task.Exception;
             if (task.IsCompleted)
             {
-                Initialize(null, socket, bufferSize);
+                InitializeClient();
+                StartReader(bufferSize);
                 return;
             }
+            Close();
             throw new TimeoutException();
         }
 #else
-        void Connect(Socket socket, int bufferSize, IAsyncResult asyncResult)
+        void Connect(int bufferSize, IAsyncResult asyncResult)
         {
             if (asyncResult.AsyncWaitHandle.WaitOne(ConnectTimeout))
             {
-                socket.EndConnect(asyncResult);
-                Initialize(null, socket, bufferSize);
+                Socket.EndConnect(asyncResult);
+                InitializeClient();
+                StartReader(bufferSize);
             }
             else
             {
-                socket.Close();
+                Close();
                 throw new TimeoutException();
             }
         }
@@ -290,24 +356,9 @@ namespace Cave.Net
         public void Connect(string hostname, int port, int bufferSize = 64 * 1024)
         {
 #if NETSTANDARD13
-            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
-            {
-                ExclusiveAddressUse = false
-            };
-            var task = socket.ConnectAsync(hostname, port);
-            Connect(socket, bufferSize, task);
-#elif NET20 || NET35
-            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
-            {
-                ExclusiveAddressUse = false
-            };
-            Connect(socket, bufferSize, socket.BeginConnect(hostname, port, null, null));
+            Connect(bufferSize, Socket.ConnectAsync(hostname, port));
 #else
-            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
-            {
-                ExclusiveAddressUse = false
-            };
-            Connect(socket, bufferSize, socket.BeginConnect(hostname, port, null, null));
+            Connect(bufferSize, Socket.BeginConnect(hostname, port, null, null));
 #endif
         }
 
@@ -320,18 +371,9 @@ namespace Cave.Net
         public void Connect(IPAddress address, int port, int bufferSize = 64 * 1024)
         {
 #if NETSTANDARD13
-            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
-            {
-                ExclusiveAddressUse = false
-            };
-            var task = socket.ConnectAsync(address, port);
-            Connect(socket, bufferSize, task);
+            Connect(bufferSize, Socket.ConnectAsync(address, port));
 #else
-            var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
-            {
-                ExclusiveAddressUse = false
-            };
-            Connect(socket, bufferSize, socket.BeginConnect(address, port, null, null));
+            Connect(bufferSize, Socket.BeginConnect(address, port, null, null));
 #endif
         }
 
@@ -358,8 +400,16 @@ namespace Cave.Net
         public void Send(byte[] buffer)
         {
             if (!IsConnected) { throw new InvalidOperationException("Not connected!"); }
-            Socket.Send(buffer);
-            Interlocked.Add(ref m_BytesSent, buffer.Length);
+            try
+            {
+                Socket.Send(buffer);
+            }
+            catch
+            {
+                Close();
+                throw;
+            }
+            Interlocked.Add(ref bytesSent, buffer.Length);
         }
 
         /// <summary>
@@ -370,8 +420,16 @@ namespace Cave.Net
         public void Send(byte[] buffer, int length)
         {
             if (!IsConnected) { throw new InvalidOperationException("Not connected!"); }
-            Socket.Send(buffer, 0, length, 0);
-            Interlocked.Add(ref m_BytesSent, length);
+            try
+            {
+                Socket.Send(buffer, 0, length, 0);
+            }
+            catch
+            {
+                Close();
+                throw;
+            }
+            Interlocked.Add(ref bytesSent, length);
         }
 
         /// <summary>
@@ -383,41 +441,50 @@ namespace Cave.Net
         public void Send(byte[] buffer, int offset, int length)
         {
             if (!IsConnected) { throw new InvalidOperationException("Not connected!"); }
-            Socket.Send(buffer, offset, length, 0);
-            Interlocked.Add(ref m_BytesSent, length - offset);
+            try
+            {
+                Socket.Send(buffer, offset, length, 0);
+            }
+            catch
+            {
+                Close();
+                throw;
+            }
+            Interlocked.Add(ref bytesSent, length - offset);
         }
 
         /// <summary>Closes this instance.</summary>
         public void Close() => Dispose();
-#endregion
+        #endregion
 
-#region IDisposable Support
+        #region IDisposable Support
 
         /// <summary>Releases the unmanaged resources used by this instance and optionally releases the managed resources.</summary>
         /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
         protected virtual void Dispose(bool disposing)
         {
-            if (m_Closing)
+            if (closing)
             {
                 return;
             }
 
-            m_Closing = true;
+            closing = true;
             if (disposing)
             {
                 GC.SuppressFinalize(this);
             }
 #if NETSTANDARD13
-            Socket?.Dispose();
+            socket?.Dispose();
 #else
-            Socket?.Close();
+            socket?.Close();
 #endif
+            socket = null;
             Stream?.Dispose();
-            m_SocketAsync?.Dispose();
-            m_SocketAsync = null;
+            socketAsync?.Dispose();
+            socketAsync = null;
             Stream = null;
-            Socket = null;
             ReceiveBuffer = null;
+            OnDisconnect();
         }
 
         /// <summary>Releases unmanaged and managed resources.</summary>
@@ -425,17 +492,13 @@ namespace Cave.Net
         {
             Dispose(true);
         }
-#endregion
+        #endregion
 
-#region public properties
+        #region public properties
 
         /// <summary>Provides access to the raw TCP stream.</summary>
         /// <value>The TCP stream instance.</value>
         public TcpAsyncStream Stream { get; private set; }
-
-        /// <summary>Provides access to the TCP socket.</summary>
-        /// <value>The TCP socket instance.</value>
-        Socket Socket;
 
         /// <summary>Gets the receive buffer.</summary>
         /// <value>The receive buffer.</value>
@@ -445,38 +508,14 @@ namespace Cave.Net
         /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a read operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the connect operation does not time out.</value>
         public int ConnectTimeout { get; set; } = 5000;
 
-        /// <summary>Gets or sets the amount of time, in milliseconds, that a read operation blocks waiting for data.</summary>
-        /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a read operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the read operation does not time out.</value>
-        public int ReceiveTimeout
-        {
-            get => m_ReceiveTimeout;
-            set
-            {
-                if (Socket == null) { m_ReceiveTimeout = value; }
-                else { m_ReceiveTimeout = Socket.ReceiveTimeout = value; }
-            }
-        }
-
-        /// <summary>Gets or sets the amount of time, in milliseconds, that a write operation blocks waiting for transmission.</summary>
-        /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a write operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the write operation does not time out.</value>
-        public int SendTimeout
-        {
-            get => m_SendTimeout;
-            set
-            {
-                if (Socket == null) { m_SendTimeout = value; }
-                else { m_SendTimeout = Socket.SendTimeout = value; }
-            }
-        }
-
         /// <summary>Gets a value indicating whether the client is connected.</summary>
-        public bool IsConnected => (Socket?.Connected).GetValueOrDefault();
+        public bool IsConnected => !closing && (socket?.Connected).GetValueOrDefault();
 
         /// <summary>Gets the number of bytes received.</summary>
-        public long BytesReceived => Interlocked.Read(ref m_BytesReceived);
+        public long BytesReceived => Interlocked.Read(ref bytesReceived);
 
         /// <summary>Gets the number of bytes sent.</summary>
-        public long BytesSent => Interlocked.Read(ref m_BytesSent);
+        public long BytesSent => Interlocked.Read(ref bytesSent);
 
         /// <summary>Gets the remote end point.</summary>
         /// <value>The remote end point.</value>
@@ -486,14 +525,79 @@ namespace Cave.Net
         /// <value>The local end point.</value>
         public IPEndPoint LocalEndPoint { get; private set; }
 
+        /// <summary>Gets or sets the amount of time, in milliseconds, that a read operation blocks waiting for data.</summary>
+        /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a read operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the read operation does not time out.</value>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        public int ReceiveTimeout
+        {
+            get => Socket.ReceiveTimeout;
+            set => Socket.ReceiveTimeout = value;
+        }
+
+        /// <summary>Gets or sets the amount of time, in milliseconds, that a write operation blocks waiting for transmission.</summary>
+        /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a write operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the write operation does not time out.</value>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        public int SendTimeout
+        {
+            get => Socket.SendTimeout;
+            set => Socket.SendTimeout = value;
+        }
+
+        /// <summary>
+        /// Gets or sets a value that specifies the Time To Live (TTL) value of Internet Protocol (IP) packets sent by the Socket.
+        /// </summary>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        public short Ttl
+        {
+            get => Socket.Ttl;
+            set => Socket.Ttl = value;
+        }
+
         /// <summary>Gets or sets a Boolean value that specifies whether the stream Socket is using the Nagle algorithm.</summary>
         /// <value><c>true</c> if the Socket uses the Nagle algorithm; otherwise, <c>false</c>.</value>
-        public bool NoDelay { get => Socket.NoDelay; set => Socket.NoDelay = value; }
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        public bool NoDelay
+        {
+            get => Socket.NoDelay;
+            set => Socket.NoDelay = value;
+        }
+
+        /// <summary>
+        /// Gets or sets a value that specifies whether the Socket will delay closing a socket in an attempt to send all pending data.
+        /// </summary>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        public LingerOption LingerState
+        {
+            get => Socket.LingerState;
+            set => Socket.LingerState = value;
+        }
 
         /// <summary>
         /// Server instance this client belongs to. May be <c>null</c>.
         /// </summary>
         public ITcpServer Server { get; private set; }
-#endregion
+        #endregion
+
+        /// <summary>
+        /// Returns a string that represents the current object.
+        /// </summary>
+        /// <returns>tcp://remoteip:port</returns>
+        public override string ToString()
+        {
+            return $"tcp://{RemoteEndPoint}";
+        }
+    }
+
+    /// <summary>
+    /// Provides an async tcp client implementation for typed server instances
+    /// </summary>
+    /// <typeparam name="TServer"></typeparam>
+    public class TcpAsyncClient<TServer> : TcpAsyncClient
+        where TServer : ITcpServer
+    {
+        /// <summary>
+        /// Server instance this client belongs to. May be <c>null</c>.
+        /// </summary>
+        public new TServer Server => (TServer)base.Server;
     }
 }

@@ -44,11 +44,10 @@
  */
 #endregion
 
-using Cave.IO;
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using Cave.IO;
 
 namespace Cave.Net
 {
