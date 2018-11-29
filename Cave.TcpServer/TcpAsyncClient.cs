@@ -63,6 +63,12 @@ namespace Cave.Net
     [DebuggerDisplay("{RemoteEndPoint}")]
     public class TcpAsyncClient : IDisposable
     {
+        class AsyncParameters
+        {
+            public AsyncParameters(int bufferSize) => BufferSize = bufferSize;
+            public int BufferSize { get; }
+        }
+
         #region private class
         bool connectedEventTriggered;
         bool closing;
@@ -324,34 +330,102 @@ namespace Cave.Net
 
         #region public functions
 
-
 #if NETSTANDARD13
         void Connect(int bufferSize, Task task)
         {
-            task.Wait(ConnectTimeout);
-            if (task.IsFaulted) throw task.Exception;
-            if (task.IsCompleted)
+            try
             {
-                InitializeClient();
-                StartReader(bufferSize);
-                return;
+                task.Wait(ConnectTimeout);
+                if (task.IsFaulted) throw task.Exception;
+                if (task.IsCompleted)
+                {
+                    InitializeClient();
+                    StartReader(bufferSize);
+                    return;
+                }
+                Close();
+                throw new TimeoutException();
             }
-            Close();
-            throw new TimeoutException();
+            catch (Exception ex)
+            {
+                OnError(ex);
+                throw;
+            }
         }
 #else
         void Connect(int bufferSize, IAsyncResult asyncResult)
         {
-            if (asyncResult.AsyncWaitHandle.WaitOne(ConnectTimeout))
+            try
             {
+                if (asyncResult.AsyncWaitHandle.WaitOne(ConnectTimeout))
+                {
+                    Socket.EndConnect(asyncResult);
+                    InitializeClient();
+                    StartReader(bufferSize);
+                }
+                else
+                {
+                    Close();
+                    throw new TimeoutException();
+                }
+            }
+            catch (Exception ex)
+            {
+                OnError(ex);
+                throw;
+            }
+        }
+#endif
+
+        void ConnectAsyncCallback(object sender, SocketAsyncEventArgs e)
+        {
+            // try everything to avoid throwing an expensive exception in async mode
+            if (e.SocketError != SocketError.Success)
+            {
+#if !NET20 && !NET35
+                if (e.ConnectByNameError != null)
+                {
+                    OnError(e.ConnectByNameError);
+                    return;
+                }
+#endif
+                OnError(new SocketException((int)e.SocketError));
+                return;
+            }
+            if (!Socket.Connected)
+            {
+                OnError(new SocketException((int)SocketError.SocketError));
+                return;
+            }
+            try
+            {
+                InitializeClient();
+                StartReader(((AsyncParameters)e.UserToken).BufferSize);
+            }
+            catch (Exception ex)
+            {
+                OnError(ex);
+            }
+        }
+
+#if NET20 || NET35
+        void ConnectAsyncCallback(IAsyncResult asyncResult)
+        {
+            // try everything to avoid throwing an expensive exception in async mode
+            try
+            {
+                if (!Socket.Connected)
+                {
+                    OnError(new SocketException((int)SocketError.SocketError));
+                    return;
+                }
                 Socket.EndConnect(asyncResult);
                 InitializeClient();
-                StartReader(bufferSize);
+                StartReader(((AsyncParameters)asyncResult.AsyncState).BufferSize);
             }
-            else
+            catch (Exception ex)
             {
-                Close();
-                throw new TimeoutException();
+                OnError(ex);
             }
         }
 #endif
@@ -364,10 +438,36 @@ namespace Cave.Net
         /// <param name="bufferSize">tcp buffer size in bytes</param>
         public void Connect(string hostname, int port, int bufferSize = 64 * 1024)
         {
+            if (closing) throw new ObjectDisposedException(nameof(TcpAsyncClient));
+            if (initialized) throw new InvalidOperationException("Client already connected!");
 #if NETSTANDARD13
             Connect(bufferSize, Socket.ConnectAsync(hostname, port));
 #else
             Connect(bufferSize, Socket.BeginConnect(hostname, port, null, null));
+#endif
+        }
+
+        /// <summary>
+        /// Connects to the specified hostname and port
+        /// </summary>
+        /// <param name="hostname">hostname to resolve</param>
+        /// <param name="port">port to connect to</param>
+        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        public void ConnectAsync(string hostname, int port, int bufferSize = 64 * 1024)
+        {
+            if (closing) throw new ObjectDisposedException(nameof(TcpAsyncClient));
+            if (initialized) throw new InvalidOperationException("Client already connected!");
+
+#if NET20 || NET35
+            Socket.BeginConnect(hostname, port, ConnectAsyncCallback, new AsyncParameters(bufferSize));
+#else
+            SocketAsyncEventArgs e = new SocketAsyncEventArgs()
+            {
+                RemoteEndPoint = new DnsEndPoint(hostname, port),
+                UserToken = new AsyncParameters(bufferSize),
+            };
+            e.Completed += ConnectAsyncCallback;
+            Socket.ConnectAsync(e);
 #endif
         }
 
@@ -379,6 +479,9 @@ namespace Cave.Net
         /// <param name="bufferSize">tcp buffer size in bytes</param>
         public void Connect(IPAddress address, int port, int bufferSize = 64 * 1024)
         {
+            if (closing) throw new ObjectDisposedException(nameof(TcpAsyncClient));
+            if (initialized) throw new InvalidOperationException("Client already connected!");
+            RemoteEndPoint = new IPEndPoint(address, port);
 #if NETSTANDARD13
             Connect(bufferSize, Socket.ConnectAsync(address, port));
 #else
@@ -387,11 +490,46 @@ namespace Cave.Net
         }
 
         /// <summary>
+        /// Performs an asynchonous connect to the specified address and port
+        /// </summary>
+        /// <remarks>
+        /// This function returns immediately. 
+        /// Results are delivered by the <see cref="Error"/> / <see cref="Connected"/> events.
+        /// </remarks>
+        /// <param name="address">ip address to connect to</param>
+        /// <param name="port">port to connect to</param>
+        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        public void ConnectAsync(IPAddress address, int port, int bufferSize = 64 * 1024)
+        {
+            if (closing) throw new ObjectDisposedException(nameof(TcpAsyncClient));
+            if (initialized) throw new InvalidOperationException("Client already connected!");
+            RemoteEndPoint = new IPEndPoint(address, port);
+            SocketAsyncEventArgs e = new SocketAsyncEventArgs()
+            {
+                RemoteEndPoint = new IPEndPoint(address, port),
+                UserToken = new AsyncParameters(bufferSize),
+            };
+            e.Completed += ConnectAsyncCallback;
+            Socket.ConnectAsync(e);
+        }
+
+        /// <summary>
         /// Connects to the specified address and port
         /// </summary>
         /// <param name="endPoint">ip endpoint to connect to</param>
         /// <param name="bufferSize">tcp buffer size in bytes</param>
         public void Connect(IPEndPoint endPoint, int bufferSize = 64 * 1024) => Connect(endPoint.Address, endPoint.Port, bufferSize);
+
+        /// <summary>
+        /// Performs an asynchonous connect to the specified address and port
+        /// </summary>
+        /// <remarks>
+        /// This function returns immediately. 
+        /// Results are delivered by the <see cref="Error"/> / <see cref="Connected"/> events.
+        /// </remarks>
+        /// <param name="endPoint">ip endpoint to connect to</param>
+        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        public void ConnectAsync(IPEndPoint endPoint, int bufferSize = 64 * 1024) => ConnectAsync(endPoint.Address, endPoint.Port, bufferSize);
 
         /// <summary>Gets the stream.</summary>
         /// <returns></returns>
