@@ -5,9 +5,9 @@
     <OutputType>Exe</OutputType>
     <ApplicationIcon />
     <StartupObject />
-    <Version>1.0.0-alpha-$(Configuration.ToLower())-4</Version>
-    <AssemblyVersion>1.0.0.4</AssemblyVersion>
-    <FileVersion>2018.1128.2105.2995</FileVersion>
+    <Version>1.0.0-alpha-$(Configuration.ToLower())-5</Version>
+    <AssemblyVersion>1.0.0.5</AssemblyVersion>
+    <FileVersion>2018.1129.2129.3034</FileVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.9.0" />
