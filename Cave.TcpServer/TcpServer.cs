@@ -141,7 +141,7 @@ namespace Cave.Net
                 {
                     //create client
                     TClient client = new TClient();
-                    client.Disconnected += this.ClientDisconnected;
+                    client.Disconnected += ClientDisconnected;
                     try
                     {
                         //add to my client list
