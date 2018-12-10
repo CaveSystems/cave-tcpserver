@@ -15,12 +15,14 @@ namespace Test
         [TestMethod]
         public void TestAccept()
         {
-            var id = nameof(TestAccept);
+            string id = nameof(TestAccept);
             int port = 2048 + id.GetHashCode() % 1024;
 
-            TcpServer server = new TcpServer();
-            server.AcceptThreads = 10;
-            server.AcceptBacklog = 100;
+            TcpServer server = new TcpServer
+            {
+                AcceptThreads = 10,
+                AcceptBacklog = 100
+            };
             server.Listen(port);
             Console.WriteLine($"Test : info {id}: Opened Server at port {port}.");
 
@@ -41,10 +43,10 @@ namespace Test
             Console.WriteLine($"Test : info {id}: Test connect to 127.0.0.1 successful.");
 
             int count = 10000;
-            var watch = Stopwatch.StartNew();
+            Stopwatch watch = Stopwatch.StartNew();
             int success = 0;
 
-            var ip = IPAddress.Parse("127.0.0.1");
+            IPAddress ip = IPAddress.Parse("127.0.0.1");
             Parallel.For(0, count, new ParallelOptions() { MaxDegreeOfParallelism = 10 }, (n) =>
             {
                 using (TcpAsyncClient client = new TcpAsyncClient())
@@ -63,7 +65,7 @@ namespace Test
         [TestMethod]
         public void TestSend()
         {
-            var id = nameof(TestSend);
+            string id = nameof(TestSend);
             int port = 2048 + id.GetHashCode() % 1024;
 
             TcpServer server = new TcpServer();
@@ -78,8 +80,8 @@ namespace Test
             Console.WriteLine($"Test : info {id}: Opened Server at port {port}.");
 
             long bytes = 0;
-            var watch = Stopwatch.StartNew();
-            var ip = IPAddress.Parse("127.0.0.1");
+            Stopwatch watch = Stopwatch.StartNew();
+            IPAddress ip = IPAddress.Parse("127.0.0.1");
 
             Parallel.For(0, 16, (n) =>
             {
@@ -110,7 +112,7 @@ namespace Test
             int clientConnectedEventCount = 0;
             int clientDisconnectedEventCount = 0;
 
-            var id = nameof(TestDisconnectAsync);
+            string id = nameof(TestDisconnectAsync);
             int port = 2048 + id.GetHashCode() % 1024;
 
             TcpServer server = new TcpServer();
@@ -129,10 +131,10 @@ namespace Test
             Console.WriteLine($"Test : info {id}: Opened Server at port {port}.");
 
             ConcurrentBag<TcpAsyncClient> clients = new ConcurrentBag<TcpAsyncClient>();
-            var ip = IPAddress.Parse("127.0.0.1");
+            IPAddress ip = IPAddress.Parse("127.0.0.1");
             Parallel.For(0, 1000, new ParallelOptions() { MaxDegreeOfParallelism = 10 }, (n) =>
             {
-                var client = new TcpAsyncClient();
+                TcpAsyncClient client = new TcpAsyncClient();
                 client.Connected += (s1, e1) =>
                 {
                     Interlocked.Increment(ref clientConnectedEventCount);
@@ -165,7 +167,7 @@ namespace Test
 
             //disconnect some
             int i = 0, disconnected = 0;
-            foreach(var client in clients)
+            foreach (TcpAsyncClient client in clients)
             {
                 if (i++ % 3 == 0)
                 {
@@ -184,9 +186,9 @@ namespace Test
 
             Console.WriteLine($"Test : info {id}: DisconnectedEventCount ({clientDisconnectedEventCount}) ok.");
 
-            foreach (var client in clients)
+            foreach (TcpAsyncClient client in clients)
             {
-                client.Dispose();
+                client.Close();
             }
             Assert.AreEqual(clientConnectedEventCount, serverClientConnectedEventCount);
 
