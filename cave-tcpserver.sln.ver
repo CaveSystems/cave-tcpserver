@@ -2,9 +2,9 @@
 AddConfig = False
 Major = 1
 Minor = 0
-Patch = 0
+Patch = 1
 Pre = -1
 Meta = 
 Type = 0
-Full = 1.0.0
+Full = 1.0.1
 
