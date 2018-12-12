@@ -1,49 +1,3 @@
-#region CopyRight 2018
-/*
-    Copyright (c) 2012-2018 Andreas Rohleder (andreas@rohleder.cc)
-    All rights reserved
-*/
-#endregion
-#region License LGPL-3
-/*
-    This program/library/sourcecode is free software; you can redistribute it
-    and/or modify it under the terms of the GNU Lesser General Public License
-    version 3 as published by the Free Software Foundation subsequent called
-    the License.
-
-    You may not use this program/library/sourcecode except in compliance
-    with the License. The License is included in the LICENSE file
-    found at the installation directory or the distribution package.
-
-    Permission is hereby granted, free of charge, to any person obtaining
-    a copy of this software and associated documentation files (the
-    "Software"), to deal in the Software without restriction, including
-    without limitation the rights to use, copy, modify, merge, publish,
-    distribute, sublicense, and/or sell copies of the Software, and to
-    permit persons to whom the Software is furnished to do so, subject to
-    the following conditions:
-
-    The above copyright notice and this permission notice shall be included
-    in all copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-    LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-#endregion
-#region Authors & Contributors
-/*
-   Author:
-     Andreas Rohleder <andreas@rohleder.cc>
-
-   Contributors:
- */
-#endregion
-
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -65,7 +19,10 @@ namespace Cave.Net
     {
         class AsyncParameters
         {
-            public AsyncParameters(int bufferSize) => BufferSize = bufferSize;
+            public AsyncParameters(int bufferSize)
+            {
+                BufferSize = bufferSize;
+            }
 
             public int BufferSize { get; }
         }
@@ -119,13 +76,13 @@ namespace Cave.Net
         /// <param name="e">The <see cref="SocketAsyncEventArgs"/> instance containing the event data.</param>
         void ReadCompleted(object sender, SocketAsyncEventArgs e)
         {
-ReadCompletedBegin:
+            ReadCompletedBegin:
             if (closing)
             {
                 return;
             }
 
-            var bytesTransferred = e.BytesTransferred;
+            int bytesTransferred = e.BytesTransferred;
 
             switch (e.SocketError)
             {
@@ -136,7 +93,7 @@ ReadCompletedBegin:
                     return;
                 default:
                     OnError(new SocketException((int)e.SocketError));
-                    Dispose();
+                    Close();
                     return;
             }
 
@@ -147,7 +104,7 @@ ReadCompletedBegin:
                 {
                     Interlocked.Add(ref bytesReceived, bytesTransferred);
                     //call event
-                    var bufferEventArgs = new BufferEventArgs(e.Buffer, e.Offset, bytesTransferred);
+                    BufferEventArgs bufferEventArgs = new BufferEventArgs(e.Buffer, e.Offset, bytesTransferred);
                     OnReceived(e.Buffer, e.Offset, bytesTransferred);
                     if (!bufferEventArgs.Handled)
                     {
@@ -236,7 +193,7 @@ ReadCompletedBegin:
             OnConnect();
             Socket.SendBufferSize = bufferSize;
             Socket.SendBufferSize = bufferSize;
-            var buffer = new byte[bufferSize];
+            byte[] buffer = new byte[bufferSize];
             socketAsync = new SocketAsyncEventArgs() { UserToken = this, };
             socketAsync.Completed += ReadCompleted;
             socketAsync.SetBuffer(buffer, 0, buffer.Length);
@@ -289,12 +246,18 @@ ReadCompletedBegin:
         /// <summary>
         /// Calls the <see cref="Received"/> event (if set).
         /// </summary>
-        protected virtual void OnReceived(byte[] buffer, int offset, int length) => Received?.Invoke(this, new BufferEventArgs(buffer, offset, length));
+        protected virtual void OnReceived(byte[] buffer, int offset, int length)
+        {
+            Received?.Invoke(this, new BufferEventArgs(buffer, offset, length));
+        }
 
         /// <summary>
         /// Calls the <see cref="Buffered"/> event (if set).
         /// </summary>
-        protected virtual void OnBuffered() => Buffered?.Invoke(this, new EventArgs());
+        protected virtual void OnBuffered()
+        {
+            Buffered?.Invoke(this, new EventArgs());
+        }
 
         /// <summary>Calls the Error event (if set) and closes the connection.</summary>
         /// <param name="ex">The exception (in most cases this will be a <see cref="SocketException"/></param>
@@ -553,7 +516,10 @@ ReadCompletedBegin:
         /// </summary>
         /// <param name="endPoint">ip endpoint to connect to</param>
         /// <param name="bufferSize">tcp buffer size in bytes</param>
-        public void Connect(IPEndPoint endPoint, int bufferSize = 64 * 1024) => Connect(endPoint.Address, endPoint.Port, bufferSize);
+        public void Connect(IPEndPoint endPoint, int bufferSize = 64 * 1024)
+        {
+            Connect(endPoint.Address, endPoint.Port, bufferSize);
+        }
 
         /// <summary>
         /// Performs an asynchonous connect to the specified address and port
@@ -567,7 +533,7 @@ ReadCompletedBegin:
         public void ConnectAsync(EndPoint endPoint, int bufferSize = 64 * 1024)
         {
             RemoteEndPoint = endPoint as IPEndPoint;
-            var e = new SocketAsyncEventArgs()
+            SocketAsyncEventArgs e = new SocketAsyncEventArgs()
             {
                 RemoteEndPoint = endPoint,
                 UserToken = new AsyncParameters(bufferSize),
@@ -595,18 +561,7 @@ ReadCompletedBegin:
         /// <param name="buffer"></param>
         public void Send(byte[] buffer)
         {
-            if (!IsConnected)
-            { throw new InvalidOperationException("Not connected!"); }
-            try
-            {
-                Socket.Send(buffer);
-            }
-            catch
-            {
-                Close();
-                throw;
-            }
-            Interlocked.Add(ref bytesSent, buffer.Length);
+            Send(buffer, 0, buffer.Length);
         }
 
         /// <summary>
@@ -616,20 +571,7 @@ ReadCompletedBegin:
         /// <param name="length"></param>
         public void Send(byte[] buffer, int length)
         {
-            if (!IsConnected)
-            {
-                throw new InvalidOperationException("Not connected!");
-            }
-            try
-            {
-                Socket.Send(buffer, 0, length, 0);
-            }
-            catch
-            {
-                Close();
-                throw;
-            }
-            Interlocked.Add(ref bytesSent, length);
+            Send(buffer, 0, length);
         }
 
         /// <summary>
@@ -641,13 +583,16 @@ ReadCompletedBegin:
         public void Send(byte[] buffer, int offset, int length)
         {
             if (!IsConnected)
-            { throw new InvalidOperationException("Not connected!"); }
+            {
+                throw new InvalidOperationException("Not connected!");
+            }
             try
             {
                 Socket.Send(buffer, offset, length, 0);
             }
-            catch
+            catch (Exception ex)
             {
+                OnError(ex);
                 Close();
                 throw;
             }
@@ -655,7 +600,17 @@ ReadCompletedBegin:
         }
 
         /// <summary>Closes this instance.</summary>
-        public void Close() => Dispose();
+        public virtual void Close()
+        {
+            if (closing)
+            {
+                return;
+            }
+
+            closing = true;
+            OnDisconnect();
+            Dispose();
+        }
         #endregion
 
         #region IDisposable Support
@@ -664,16 +619,6 @@ ReadCompletedBegin:
         /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
         protected virtual void Dispose(bool disposing)
         {
-            if (closing)
-            {
-                return;
-            }
-
-            closing = true;
-            if (disposing)
-            {
-                GC.SuppressFinalize(this);
-            }
 #if NETSTANDARD13
             socket?.Dispose();
 #else
@@ -685,11 +630,14 @@ ReadCompletedBegin:
             socketAsync = null;
             Stream = null;
             ReceiveBuffer = null;
-            OnDisconnect();
         }
 
         /// <summary>Releases unmanaged and managed resources.</summary>
-        public void Dispose() => Dispose(true);
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+            Dispose(true);
+        }
         #endregion
 
         #region public properties
@@ -780,7 +728,10 @@ ReadCompletedBegin:
         /// Returns a string that represents the current object.
         /// </summary>
         /// <returns>tcp://remoteip:port</returns>
-        public override string ToString() => $"tcp://{RemoteEndPoint}";
+        public override string ToString()
+        {
+            return $"tcp://{RemoteEndPoint}";
+        }
     }
 
     /// <summary>

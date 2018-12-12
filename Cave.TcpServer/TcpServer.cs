@@ -1,49 +1,3 @@
-#region CopyRight 2018
-/*
-    Copyright (c) 2012-2018 Andreas Rohleder (andreas@rohleder.cc)
-    All rights reserved
-*/
-#endregion
-#region License LGPL-3
-/*
-    This program/library/sourcecode is free software; you can redistribute it
-    and/or modify it under the terms of the GNU Lesser General Public License
-    version 3 as published by the Free Software Foundation subsequent called
-    the License.
-
-    You may not use this program/library/sourcecode except in compliance
-    with the License. The License is included in the LICENSE file
-    found at the installation directory or the distribution package.
-
-    Permission is hereby granted, free of charge, to any person obtaining
-    a copy of this software and associated documentation files (the
-    "Software"), to deal in the Software without restriction, including
-    without limitation the rights to use, copy, modify, merge, publish,
-    distribute, sublicense, and/or sell copies of the Software, and to
-    permit persons to whom the Software is furnished to do so, subject to
-    the following conditions:
-
-    The above copyright notice and this permission notice shall be included
-    in all copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-    LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-#endregion
-#region Authors & Contributors
-/*
-   Author:
-     Andreas Rohleder <andreas@rohleder.cc>
-
-   Contributors:
- */
-#endregion
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -67,8 +21,16 @@ namespace Cave.Net
         readonly Dictionary<SocketAsyncEventArgs, SocketAsyncEventArgs> m_PendingAccepts = new Dictionary<SocketAsyncEventArgs, SocketAsyncEventArgs>();
         readonly Dictionary<TClient, TClient> m_Clients = new Dictionary<TClient, TClient>();
 
-        void AddPendingAccept(SocketAsyncEventArgs e) => m_PendingAccepts.Add(e, e);
-        void AddClient(TClient client) => m_Clients.Add(client, client);
+        void AddPendingAccept(SocketAsyncEventArgs e)
+        {
+            m_PendingAccepts.Add(e, e);
+        }
+
+        void AddClient(TClient client)
+        {
+            m_Clients.Add(client, client);
+        }
+
         void RemoveClient(TClient client) { if (m_Clients.ContainsKey(client)) { m_Clients.Remove(client); } }
         IEnumerable<TClient> ClientList => m_Clients.Keys;
         IEnumerable<SocketAsyncEventArgs> PendingAcceptList => m_PendingAccepts.Keys;
@@ -76,8 +38,16 @@ namespace Cave.Net
         readonly HashSet<SocketAsyncEventArgs> m_PendingAccepts = new HashSet<SocketAsyncEventArgs>();
         readonly HashSet<TClient> m_Clients = new HashSet<TClient>();
 
-        void AddPendingAccept(SocketAsyncEventArgs e) => m_PendingAccepts.Add(e);
-        void AddClient(TClient client) => m_Clients.Add(client);
+        void AddPendingAccept(SocketAsyncEventArgs e)
+        {
+            m_PendingAccepts.Add(e);
+        }
+
+        void AddClient(TClient client)
+        {
+            m_Clients.Add(client);
+        }
+
         void RemoveClient(TClient client) { if (m_Clients.Contains(client)) { m_Clients.Remove(client); } }
         IEnumerable<TClient> ClientList => m_Clients;
         IEnumerable<SocketAsyncEventArgs> PendingAcceptList => m_PendingAccepts;
@@ -129,7 +99,7 @@ namespace Cave.Net
         void AcceptCompleted(object sender, SocketAsyncEventArgs e)
         {
             AcceptCompletedBegin:
-            var waiting = Interlocked.Decrement(ref m_AcceptWaiting);
+            int waiting = Interlocked.Decrement(ref m_AcceptWaiting);
             if (waiting == 0)
             {
                 OnAcceptTasksBusy();
@@ -280,7 +250,7 @@ namespace Cave.Net
             {
                 foreach (TClient c in ClientList)
                 {
-                    c.Dispose();
+                    c.Close();
                 }
                 m_Clients.Clear();
             }
@@ -319,7 +289,7 @@ namespace Cave.Net
         /// <exception cref="System.InvalidOperationException">Socket is already listening!</exception>
         public int AcceptBacklog
         {
-            get { return m_AcceptBacklog; }
+            get => m_AcceptBacklog;
             set
             {
                 if (m_Socket != null)
@@ -336,7 +306,7 @@ namespace Cave.Net
         /// <exception cref="System.InvalidOperationException">Socket is already listening!</exception>
         public int AcceptThreads
         {
-            get { return m_AcceptThreads; }
+            get => m_AcceptThreads;
             set
             {
                 if (m_Socket != null)
@@ -354,7 +324,7 @@ namespace Cave.Net
         /// <exception cref="System.ArgumentOutOfRangeException">value</exception>
         public int BufferSize
         {
-            get { return m_TcpBufferSize; }
+            get => m_TcpBufferSize;
             set
             {
                 if (m_Socket != null)
@@ -387,7 +357,7 @@ namespace Cave.Net
         /// <value>
         /// <c>true</c> if this instance is listening; otherwise, <c>false</c>.
         /// </value>
-        public bool IsListening { get { return m_Socket != null && m_Socket.IsBound; } }
+        public bool IsListening => m_Socket != null && m_Socket.IsBound;
 
         /// <summary>
         /// Event to be called whenever all accept tasks get busy. This may indicate declined connections attempts (due to a full backlog).
@@ -417,7 +387,7 @@ namespace Cave.Net
             }
         }
 
-#region IDisposable Support
+        #region IDisposable Support
         bool m_Disposed = false;
 
         /// <summary>Releases the unmanaged resources used by this instance and optionally releases the managed resources.</summary>
@@ -441,7 +411,7 @@ namespace Cave.Net
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-#endregion
+        #endregion
 
         /// <summary>
         /// Returns a string that represents the current object.
