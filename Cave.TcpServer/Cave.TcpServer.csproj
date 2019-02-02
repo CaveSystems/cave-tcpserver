@@ -7,11 +7,11 @@
     <Authors>Andreas Rohleder</Authors>
     <Company>CaveSystems GmbH, Andreas Rohleder</Company>
     <Product>CaveSystems TcpServer Library</Product>
-    <Copyright>(c) 2003-2018 Andreas Rohleder</Copyright>
+    <Copyright>(c) 2003-2019 Andreas Rohleder</Copyright>
     <PackageLicenseUrl>https://www.gnu.org/licenses/lgpl-3.0.en.html</PackageLicenseUrl>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>cave-tcpserver.snk</AssemblyOriginatorKeyFile>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <PackageIconUrl>https://www.cavesystems.de/favicon.ico</PackageIconUrl>
     <PackageTags>CaveSystems TcpServer TcpAsyncClient</PackageTags>
     <PackageProjectUrl>https://www.cavesystems.de</PackageProjectUrl>
@@ -22,25 +22,21 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyVersion>1.0.2</AssemblyVersion>
-    <FileVersion>2019.108.1843.188</FileVersion>
+    <AssemblyVersion>1.0.3</AssemblyVersion>
+    <FileVersion>2019.202.1315.522</FileVersion>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
     <NeutralLanguage />
     <DelaySign>false</DelaySign>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DebugType>pdbonly</DebugType>
     <DebugSymbols>true</DebugSymbols>
     <IncludeSymbols>true</IncludeSymbols>
     <IncludeSymbolsInPackage>true</IncludeSymbolsInPackage>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DefineConstants>TRACE;DEBUG;</DefineConstants>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <IncludeSymbols>true</IncludeSymbols>
-    <IncludeSymbolsInPackage>true</IncludeSymbolsInPackage>
-    <EmbedSources>true</EmbedSources>
   </PropertyGroup>
   <!-- Workaround for EmbedSources support, see https://github.com/dotnet/roslyn/issues/19127-->
   <Target Condition="'$(Configuration)'=='Debug'" Name="PopulateEmbeddedFiles" AfterTargets="BeforeCompile" BeforeTargets="CoreCompile">

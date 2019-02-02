@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Cave.Net;
@@ -198,6 +199,48 @@ namespace Test
             Assert.AreEqual(clientDisconnectedEventCount, serverClientDisconnectedEventCount);
 
             Console.WriteLine($"Test : info {id}: DisconnectedEventCount ({clientDisconnectedEventCount}) ok.");
+        }
+
+        [TestMethod]
+        public void TestPortAlreadyInUse1()
+        {
+            var listen = TcpListener.Create(2001);
+            listen.Start();
+            try
+            {
+                var server = new TcpServer();
+                server.Listen(2001);
+                Assert.Fail("AddressAlreadyInUse expected!");
+            }
+            catch(SocketException ex)
+            {
+                Assert.AreEqual(SocketError.AddressAlreadyInUse, ex.SocketErrorCode);
+            }
+            finally
+            {
+                listen.Stop();
+            }
+        }
+
+        [TestMethod]
+        public void TestPortAlreadyInUse2()
+        {
+            var listen = new TcpListener(IPAddress.Any, 2001);
+            listen.Start();
+            try
+            {
+                var server = new TcpServer();
+                server.Listen(2001);
+                Assert.Fail("AddressAlreadyInUse expected!");
+            }
+            catch (SocketException ex)
+            {
+                Assert.AreEqual(SocketError.AddressAlreadyInUse, ex.SocketErrorCode);
+            }
+            finally
+            {
+                listen.Stop();
+            }
         }
     }
 }

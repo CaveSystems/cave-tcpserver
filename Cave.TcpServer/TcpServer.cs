@@ -59,6 +59,7 @@ namespace Cave.Net
         int m_TcpBufferSize = 64 * 1024;
         bool m_Shutdown;
         int m_AcceptWaiting;
+        bool m_NoExclusiveAddressUse;
 
         void AcceptStart()
         {
@@ -189,6 +190,23 @@ namespace Cave.Net
         /// <summary>Initializes a new instance of the <see cref="TcpServer{TClient}"/> class.</summary>
         public TcpServer() { }
 
+        /// <summary>
+        /// Gets or sets a Boolean value that specifies whether the Socket allows only one process to bind to a port.
+        /// </summary>
+        /// <remarks>
+        /// Set to true if the Socket allows only one socket to bind to a specific port; otherwise, false.
+        /// The default is true.
+        /// </remarks>
+        public bool ExclusiveAddressUse
+        {
+            get => !m_NoExclusiveAddressUse;
+            set
+            {
+                if (m_Socket != null) throw new InvalidOperationException("Socket is already bound!");
+                m_NoExclusiveAddressUse = !value;
+            }
+        }
+
         /// <summary>Listens at the specified end point.</summary>
         /// <param name="endPoint">The end point.</param>
         /// <exception cref="System.ObjectDisposedException">TcpSocketServer</exception>
@@ -211,7 +229,7 @@ namespace Cave.Net
                     break;
             }
 
-            //m_Socket.UseOnlyOverlappedIO = true;
+            m_Socket.ExclusiveAddressUse = !m_NoExclusiveAddressUse;
             m_Socket.Bind(endPoint);
             m_Socket.Listen(AcceptBacklog);
             LocalEndPoint = (IPEndPoint)m_Socket.LocalEndPoint;
