@@ -10,27 +10,27 @@ namespace Cave.Net
         bool handled;
 
         /// <summary>
-        /// Full buffer instance
+        /// Gets the full buffer instance
         /// </summary>
         public byte[] Buffer { get; }
 
         /// <summary>
-        /// Start offset of data in <see cref="Buffer"/>
+        /// Gets the start offset of data in <see cref="Buffer"/>
         /// </summary>
         public int Offset { get; }
 
         /// <summary>
-        /// Length of data in <see cref="Buffer"/>
+        /// Gets the length of data in <see cref="Buffer"/>
         /// </summary>
         public int Length { get; }
 
         /// <summary>
-        /// Set this to true to tell the sender that the buffer has been handled. Further processing will be skipped.
+        /// Gets or sets a value indicating whether the buffer has been handled. Further processing will be skipped.
         /// </summary>
         public bool Handled { get => handled; set => handled |= value; }
 
         /// <summary>
-        /// Creates a new <see cref="BufferEventArgs"/> instance
+        /// Initializes a new instance of the <see cref="BufferEventArgs"/> class.
         /// </summary>
         /// <param name="buffer">buffer instance</param>
         /// <param name="offset">offset of data</param>

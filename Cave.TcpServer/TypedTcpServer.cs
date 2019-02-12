@@ -4,12 +4,13 @@ using System.Runtime.InteropServices;
 namespace Cave.Net
 {
     /// <summary>
-    /// Provides a fast TcpServer implementation using the default TcpServerClient class.
-    /// For own client implementations use <see cref="TcpServer{TcpServerClient}"/>
+    /// Provides a fast TcpServer implementation using a user defined client class.
     /// </summary>
     /// <seealso cref="IDisposable" />
+    /// <typeparam name="TClient">The TcpAsyncClient{this}implementation to be used for client instances.</typeparam>
     [ComVisible(false)]
-    public class TypedTcpServer<TClient> : TcpServer<TClient> where TClient : TcpAsyncClient<TypedTcpServer<TClient>>, new()
+    public class TypedTcpServer<TClient> : TcpServer<TClient>
+        where TClient : TcpAsyncClient<TypedTcpServer<TClient>>, new()
     {
     }
 }

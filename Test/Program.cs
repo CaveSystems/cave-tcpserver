@@ -17,7 +17,7 @@ namespace Test
                     continue;
                 }
 
-                object instance = Activator.CreateInstance(type);
+                var instance = Activator.CreateInstance(type);
                 foreach (System.Reflection.MethodInfo method in type.GetMethods())
                 {
                     if (!method.GetCustomAttributes(typeof(TestMethodAttribute), false).Any())
@@ -25,7 +25,9 @@ namespace Test
                         continue;
                     }
 
-                    string id = "T" + method.GetHashCode().ToString("x4");
+                    GC.Collect(999, GCCollectionMode.Default, true);
+
+                    var id = "T" + method.GetHashCode().ToString("x4");
                     Console.WriteLine($"Test : info {id}: {method}");
                     try
                     {

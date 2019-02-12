@@ -8,59 +8,85 @@ namespace Cave.Net
     /// <summary>
     /// Provides a stream implementation for <see cref="TcpAsyncClient"/>
     /// </summary>
+    /// <remarks>All functions of this class are threadsafe</remarks>
     public class TcpAsyncStream : Stream
     {
-        TcpAsyncClient m_Client;
-        bool m_Exit;
+        TcpAsyncClient client;
+        bool exit;
 
         /// <summary>
-        /// Creates a new instance of the <see cref="TcpAsyncStream"/> class
+        /// Initializes a new instance of the <see cref="TcpAsyncStream"/> class.
         /// </summary>
-        /// <param name="client"></param>
+        /// <param name="client">Client to be used by this stream.</param>
         public TcpAsyncStream(TcpAsyncClient client)
         {
-            m_Client = client;
+            this.client = client;
         }
 
         /// <summary>
-        /// Number of bytes available for reading
+        /// Gets the number of bytes available for reading
         /// </summary>
-        public int Available { get { lock (m_Client) { return m_Client.ReceiveBuffer.Available; } } }
+        public int Available
+        {
+            get
+            {
+                FifoStream buffer = client.ReceiveBuffer;
+                lock (buffer)
+                {
+                    return buffer.Available;
+                }
+            }
+        }
 
         /// <summary>Gets or sets the amount of time, in milliseconds, that a read operation blocks waiting for data.</summary>
         /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a read operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the read operation does not time out.</value>
-        public override int ReadTimeout { get => m_Client.ReceiveTimeout; set => m_Client.ReceiveTimeout = value; }
+        public override int ReadTimeout
+        {
+            get => client.ReceiveTimeout;
+            set => client.ReceiveTimeout = value;
+        }
 
         /// <summary>Gets or sets the amount of time, in milliseconds, that a write operation blocks waiting for transmission.</summary>
         /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a write operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the write operation does not time out.</value>
-        public override int WriteTimeout { get => m_Client.SendTimeout; set => m_Client.SendTimeout = value; }
+        public override int WriteTimeout
+        {
+            get => client.ReceiveTimeout;
+            set => client.SendTimeout = value;
+        }
 
         /// <summary>
-        /// Returns true
+        /// Gets a value indicating whether the stream can be read or not. This is always true.
         /// </summary>
         public override bool CanRead => true;
 
         /// <summary>
-        /// Returns false
+        /// Gets a value indicating whether the stream can seek or not. This is always false.
         /// </summary>
         public override bool CanSeek => false;
 
         /// <summary>
-        /// Returns true
+        /// Gets a value indicating whether the stream can be written or not. This is always true.
         /// </summary>
         public override bool CanWrite => true;
 
         /// <summary>
-        /// Returns the number of bytes received (<see cref="TcpAsyncClient.BytesReceived"/>)
+        /// Gets the number of bytes received (<see cref="TcpAsyncClient.BytesReceived"/>).
         /// </summary>
-        public override long Length => m_Client.BytesReceived;
+        public override long Length => client.BytesReceived;
 
         /// <summary>
-        /// Returns the current read position at the buffers still present in memory
+        /// Gets or sets the current read position at the buffers still present in memory.
         /// </summary>
         public override long Position
         {
-            get => m_Client.ReceiveBuffer.Position;
+            get
+            {
+                FifoStream buffer = client.ReceiveBuffer;
+                lock (buffer)
+                {
+                    return buffer.Position;
+                }
+            }
             set => throw new NotSupportedException();
         }
 
@@ -78,20 +104,33 @@ namespace Cave.Net
         /// <param name="array">byte array to write data to</param>
         /// <param name="offset">start offset at array to begin writing at</param>
         /// <param name="count">number of bytes to read</param>
-        /// <returns></returns>
+        /// <returns>The total number of bytes read into the buffer. This can be less than the number of bytes requested if that many bytes are not currently available, or zero (0) if the end of the stream has been reached.</returns>
+        /// <exception cref="TimeoutException">A timeout occured while waiting for incoming data. (See <see cref="ReadTimeout"/>)</exception>
         public override int Read(byte[] array, int offset, int count)
         {
-            DateTime timeout = m_Client.ReceiveTimeout > 0 ? DateTime.UtcNow + TimeSpan.FromMilliseconds(m_Client.ReceiveTimeout) : DateTime.MaxValue;
-            FifoStream buffer = m_Client.ReceiveBuffer;
+            DateTime timeout = client.ReceiveTimeout > 0 ? DateTime.UtcNow + TimeSpan.FromMilliseconds(client.ReceiveTimeout) : DateTime.MaxValue;
+            FifoStream buffer = client.ReceiveBuffer;
             lock (buffer)
             {
                 while (true)
                 {
-                    if (m_Exit) { return 0; }
-                    if (!m_Client.IsConnected) { throw new EndOfStreamException(); }
-                    if (buffer.Available > 0) { break; }
-                    int waitTime = (int)Math.Min(1000, (timeout - DateTime.UtcNow).Ticks / TimeSpan.TicksPerMillisecond);
-                    if (waitTime <= 0) { throw new TimeoutException(); }
+                    if (exit)
+                    {
+                        return 0;
+                    }
+                    if (buffer.Available > 0)
+                    {
+                        break;
+                    }
+                    if (!client.IsConnected)
+                    {
+                        return 0;
+                    }
+                    var waitTime = (int)Math.Min(1000, (timeout - DateTime.UtcNow).Ticks / TimeSpan.TicksPerMillisecond);
+                    if (waitTime <= 0)
+                    {
+                        throw new TimeoutException();
+                    }
                     Monitor.Wait(buffer, waitTime);
                 }
                 return buffer.Read(array, offset, count);
@@ -101,33 +140,38 @@ namespace Cave.Net
         /// <summary>
         /// Not supported
         /// </summary>
-        /// <param name="offset"></param>
-        /// <param name="origin"></param>
-        /// <returns></returns>
+        /// <param name="offset">A byte offset relative to the <paramref name="origin"/> parameter.</param>
+        /// <param name="origin">A value of type <see cref="SeekOrigin"/> indicating the reference point used to obtain the new position.</param>
+        /// <returns>The new position within the current stream.</returns>
+        /// <exception cref="NotSupportedException">The stream does not support seeking.</exception>
         public override long Seek(long offset, SeekOrigin origin)
         {
-            throw new NotSupportedException();
+            throw new NotSupportedException("The stream does not support seeking.");
         }
 
         /// <summary>
         /// Not supported
         /// </summary>
-        /// <param name="value"></param>
+        /// <param name="value">The desired length of the current stream in bytes.</param>
+        /// <exception cref="NotSupportedException">The stream does not support both writing and seeking.</exception>
         public override void SetLength(long value)
         {
-            throw new NotSupportedException();
+            throw new NotSupportedException("The stream does not support both writing and seeking.");
         }
 
         /// <summary>
-        /// Writes data to the tcp connection
+        /// Writes a sequence of bytes to the current stream and advances the current position within this stream by the number of bytes written.
         /// </summary>
-        /// <param name="buffer"></param>
-        /// <param name="offset"></param>
-        /// <param name="count"></param>
+        /// <param name="buffer">An array of bytes. This method copies <paramref name="count"/> bytes from <paramref name="buffer"/> to the current stream.</param>
+        /// <param name="offset">The zero-based byte offset in <paramref name="buffer"/> at which to begin copying bytes to the current stream.</param>
+        /// <param name="count">The number of bytes to be written to the current stream.</param>
         public override void Write(byte[] buffer, int offset, int count)
         {
-            if (m_Exit) { return; }
-            m_Client.Send(buffer, offset, count);
+            if (exit)
+            {
+                return;
+            }
+            client.Send(buffer, offset, count);
         }
 
 #if NETSTANDARD13
@@ -136,10 +180,13 @@ namespace Cave.Net
         /// </summary>
         public virtual void Close()
         {
-            if (!m_Exit)
+            if (!exit)
             {
-                if (m_Client.IsConnected) { m_Client.Close(); }
-                m_Exit = true;
+                if (client.IsConnected)
+                {
+                    client.Close();
+                }
+                exit = true;
             }
         }
 #else
@@ -148,11 +195,11 @@ namespace Cave.Net
         /// </summary>
         public override void Close()
         {
-            if (!m_Exit)
+            if (!exit)
             {
                 base.Close();
-                if (m_Client.IsConnected) { m_Client.Close(); }
-                m_Exit = true;
+                client.Close();
+                exit = true;
             }
         }
 #endif
