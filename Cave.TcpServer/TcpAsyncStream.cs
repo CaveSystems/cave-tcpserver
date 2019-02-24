@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Cave.IO;
 
 namespace Cave.Net
@@ -11,8 +12,55 @@ namespace Cave.Net
     /// <remarks>All functions of this class are threadsafe</remarks>
     public class TcpAsyncStream : Stream
     {
+        FifoBuffer sendBuffer = new FifoBuffer();
         TcpAsyncClient client;
         bool exit;
+        Task sendTask;
+
+        void Send()
+        {
+            while (!exit)
+            {
+                byte[] data;
+                lock (sendBuffer)
+                {
+                    if (sendBuffer.Length == 0)
+                    {
+                        return;
+                    }
+
+                    data = sendBuffer.Dequeue(Math.Max(64 * 1024, sendBuffer.Length));
+                }
+
+                try
+                {
+                    client.Send(data);
+                }
+                catch (Exception ex)
+                {
+                    client.OnError(ex);
+                }
+            }
+        }
+
+        bool StartSend()
+        {
+            lock (sendBuffer)
+            {
+                if (sendTask?.IsCompleted ?? true)
+                {
+                    if (sendBuffer.Length > 0)
+                    {
+                        sendTask = Task.Factory.StartNew(Send);
+                    }
+                    else
+                    {
+                        sendTask = null;
+                    }
+                }
+                return sendTask != null;
+            }
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TcpAsyncStream"/> class.
@@ -22,6 +70,13 @@ namespace Cave.Net
         {
             this.client = client;
         }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the stream use direct writes on the clients socket for each call to <see cref="Write(byte[], int, int)"/>.
+        /// Default is false buffering all writes.
+        /// You need to set thit to true if you use the clients <see cref="TcpAsyncClient.Send(byte[])"/> function and stream writing.
+        /// </summary>
+        public bool DirectWrites { get; set; }
 
         /// <summary>
         /// Gets the number of bytes available for reading
@@ -34,6 +89,20 @@ namespace Cave.Net
                 lock (buffer)
                 {
                     return buffer.Available;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the number of bytes present at the send buffer when using <see cref="DirectWrites"/> == false (default).
+        /// </summary>
+        public int SendBufferLength
+        {
+            get
+            {
+                lock (sendBuffer)
+                {
+                    return sendBuffer.Length;
                 }
             }
         }
@@ -91,10 +160,20 @@ namespace Cave.Net
         }
 
         /// <summary>
-        /// Does nothing
+        /// Waits until all buffered data is sent.
         /// </summary>
         public override void Flush()
         {
+            if (DirectWrites)
+            {
+                return;
+            }
+
+            do
+            {
+                sendTask?.Wait();
+            }
+            while (StartSend());
         }
 
         /// <summary>
@@ -171,7 +250,18 @@ namespace Cave.Net
             {
                 return;
             }
-            client.Send(buffer, offset, count);
+
+            if (DirectWrites)
+            {
+                client.Send(buffer, offset, count);
+                return;
+            }
+
+            lock (sendBuffer)
+            {
+                sendBuffer.Enqueue(buffer, offset, count);
+            }
+            StartSend();
         }
 
 #if NETSTANDARD13
@@ -182,6 +272,7 @@ namespace Cave.Net
         {
             if (!exit)
             {
+                Flush();
                 if (client.IsConnected)
                 {
                     client.Close();
@@ -197,6 +288,7 @@ namespace Cave.Net
         {
             if (!exit)
             {
+                Flush();
                 base.Close();
                 client.Close();
                 exit = true;

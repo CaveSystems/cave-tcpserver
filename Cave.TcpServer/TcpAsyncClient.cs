@@ -288,7 +288,7 @@ ReadCompletedBegin:
 
         /// <summary>Calls the Error event (if set) and closes the connection.</summary>
         /// <param name="ex">The exception (in most cases this will be a <see cref="SocketException"/></param>
-        protected virtual void OnError(Exception ex)
+        protected internal virtual void OnError(Exception ex)
         {
             if (!closing)
             {
