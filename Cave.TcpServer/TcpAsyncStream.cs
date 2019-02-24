@@ -29,7 +29,7 @@ namespace Cave.Net
                         return;
                     }
 
-                    data = sendBuffer.Dequeue(Math.Max(64 * 1024, sendBuffer.Length));
+                    data = sendBuffer.Dequeue();
                 }
 
                 try
