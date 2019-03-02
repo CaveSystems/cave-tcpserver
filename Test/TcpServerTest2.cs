@@ -324,7 +324,7 @@ namespace Test
                             client.Stream.Write(new byte[1024], 0, 1024);
                             Interlocked.Add(ref bytes, 1024);
                         }
-                        if (client.Stream.SendBufferLength > 100 * 1024 * 1024)
+                        if (client.Stream.SendBufferLength > 10 * 1024 * 1024)
                         {
                             client.Stream.Flush();
                         }
