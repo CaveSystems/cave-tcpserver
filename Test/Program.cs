@@ -27,15 +27,29 @@ namespace Test
 
                     GC.Collect(999, GCCollectionMode.Default, true);
 
-                    var id = "T" + method.GetHashCode().ToString("x4");
-                    Console.WriteLine($"Test : info {id}: {method}");
+                    Console.WriteLine($"Test : info {method.Name}: {type} {method}");
                     try
                     {
-                        method.Invoke(instance, new object[0]);
+                        var action = (Action)method.CreateDelegate(typeof(Action), instance);
+                        action();
+                        Console.WriteLine("ok");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Test : error T0002: {ex}");
+                        if (ex is AggregateException agex)
+                        {
+                            foreach (var inex in agex.InnerExceptions)
+                            {
+                                Debug.WriteLine(inex);
+                                Console.WriteLine($"Test : error T0003: {inex}");
+                            }
+                        }
+                        else
+                        {
+                            Debug.WriteLine(ex);
+                            Console.WriteLine($"Test : error T0002: {ex}");
+                        }
+
                         if (Debugger.IsAttached)
                         {
                             WaitExit();
@@ -43,6 +57,7 @@ namespace Test
 
                         return 1;
                     }
+                    Console.WriteLine("---");
                 }
             }
             if (Debugger.IsAttached)

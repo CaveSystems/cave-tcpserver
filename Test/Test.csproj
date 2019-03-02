@@ -5,11 +5,12 @@
     <OutputType>Exe</OutputType>
     <ApplicationIcon />
     <StartupObject />
-    <Version>1.0.5</Version>
-    <AssemblyVersion>1.0.5</AssemblyVersion>
-    <FileVersion>2019.222.1010.1231</FileVersion>
+    <Version>1.0.6</Version>
+    <AssemblyVersion>1.0.6</AssemblyVersion>
+    <FileVersion>2019.302.1526.827</FileVersion>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Cave.Extensions" Version="1.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.9.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="1.4.0" />
     <PackageReference Include="MSTest.TestFramework" Version="1.4.0" />

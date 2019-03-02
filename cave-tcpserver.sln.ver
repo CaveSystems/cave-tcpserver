@@ -3,8 +3,8 @@ AddConfig = False
 AddDateTime = False
 Major = 1
 Minor = 0
-Patch = 5
+Patch = 6
 Meta = 
 Type = 0
-Full = 1.0.5
+Full = 1.0.6
 

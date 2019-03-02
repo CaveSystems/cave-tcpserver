@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,53 +13,32 @@ namespace Cave.Net
     /// <remarks>All functions of this class are threadsafe</remarks>
     public class TcpAsyncStream : Stream
     {
-        FifoBuffer sendBuffer = new FifoBuffer();
-        TcpAsyncClient client;
-        bool exit;
-        Task sendTask;
+        readonly FifoBuffer sendBuffer = new FifoBuffer();
+        readonly TcpAsyncClient client;
+        bool asyncSendInProgress;
 
-        void Send()
+        void AsyncSendNext()
         {
-            while (!exit)
+            try
             {
-                byte[] data;
+                byte[] buffer;
                 lock (sendBuffer)
                 {
                     if (sendBuffer.Length == 0)
                     {
+                        asyncSendInProgress = false;
+                        Monitor.Pulse(sendBuffer);
                         return;
                     }
-
-                    data = sendBuffer.Dequeue();
+                    buffer = sendBuffer.Dequeue(Math.Min(client.BufferSize, sendBuffer.Length));
                 }
-
-                try
-                {
-                    client.Send(data);
-                }
-                catch (Exception ex)
-                {
-                    client.OnError(ex);
-                }
+                client.SendAsync(buffer, AsyncSendNext);
             }
-        }
-
-        bool StartSend()
-        {
-            lock (sendBuffer)
+            catch (Exception ex)
             {
-                if (sendTask?.IsCompleted ?? true)
-                {
-                    if (sendBuffer.Length > 0)
-                    {
-                        sendTask = Task.Factory.StartNew(Send);
-                    }
-                    else
-                    {
-                        sendTask = null;
-                    }
-                }
-                return sendTask != null;
+                Debug.WriteLine(ex);
+                asyncSendInProgress = false;
+                client.OnError(ex);
             }
         }
 
@@ -169,11 +149,27 @@ namespace Cave.Net
                 return;
             }
 
-            do
+            for (; ;)
             {
-                sendTask?.Wait();
+                lock (sendBuffer)
+                {
+                    if (!asyncSendInProgress && client.PendingAsyncSends == 0)
+                    {
+                        if (sendBuffer.Length > 0)
+                        {
+                            throw new Exception("SendAsync aborted!");
+                        }
+                        return;
+                    }
+                    if (!Monitor.Wait(sendBuffer, 1000))
+                    {
+                        if (!client.IsConnected)
+                        {
+                            throw new InvalidOperationException("Client diconnected!");
+                        }
+                    }
+                }
             }
-            while (StartSend());
         }
 
         /// <summary>
@@ -193,10 +189,6 @@ namespace Cave.Net
             {
                 while (true)
                 {
-                    if (exit)
-                    {
-                        return 0;
-                    }
                     if (buffer.Available > 0)
                     {
                         break;
@@ -246,11 +238,6 @@ namespace Cave.Net
         /// <param name="count">The number of bytes to be written to the current stream.</param>
         public override void Write(byte[] buffer, int offset, int count)
         {
-            if (exit)
-            {
-                return;
-            }
-
             if (DirectWrites)
             {
                 client.Send(buffer, offset, count);
@@ -260,8 +247,12 @@ namespace Cave.Net
             lock (sendBuffer)
             {
                 sendBuffer.Enqueue(buffer, offset, count);
+                if (!asyncSendInProgress)
+                {
+                    asyncSendInProgress = true;
+                    Task.Factory.StartNew(AsyncSendNext);
+                }
             }
-            StartSend();
         }
 
 #if NETSTANDARD13
@@ -270,14 +261,10 @@ namespace Cave.Net
         /// </summary>
         public virtual void Close()
         {
-            if (!exit)
+            if (client.IsConnected)
             {
                 Flush();
-                if (client.IsConnected)
-                {
-                    client.Close();
-                }
-                exit = true;
+                client.Close();
             }
         }
 #else
@@ -286,13 +273,12 @@ namespace Cave.Net
         /// </summary>
         public override void Close()
         {
-            if (!exit)
+            if (client.IsConnected)
             {
                 Flush();
-                base.Close();
                 client.Close();
-                exit = true;
             }
+            base.Close();
         }
 #endif
     }

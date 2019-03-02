@@ -12,6 +12,9 @@ if %errorlevel% neq 0 exit /b %errorlevel%
 msbuild /p:Configuration=Release /p:Platform="Any CPU"
 if %errorlevel% neq 0 exit /b %errorlevel%
 
+msbuild /p:Configuration=Debug /p:Platform="Any CPU"
+if %errorlevel% neq 0 exit /b %errorlevel%
+
 rem msbuild /p:Configuration=Release /p:Platform="Any CPU" documentation.shfbproj
 rem if %errorlevel% neq 0 exit /b %errorlevel%
 
