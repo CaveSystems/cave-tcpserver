@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 namespace Cave.Net
 {
     /// <summary>
-    /// Provides an async tcp client implementation
+    /// Provides an async tcp client implementation.
     /// </summary>
     [DebuggerDisplay("{RemoteEndPoint}")]
     public class TcpAsyncClient : IDisposable
@@ -199,7 +199,7 @@ ReadCompletedBegin:
         /// <summary>
         /// Initializes the client for use with the specified <paramref name="server"/> instance.
         /// </summary>
-        /// <exception cref="InvalidOperationException">Reader already started!</exception>
+        /// <exception cref="InvalidOperationException">Reader already started.</exception>
         /// <param name="server">Server instance this client belongs to.</param>
         /// <param name="socket">Socket instance this client uses.</param>
         protected internal virtual void InitializeServer(ITcpServer server, Socket socket)
@@ -246,10 +246,12 @@ ReadCompletedBegin:
             if (!isPending)
             {
 #if NET20 || NET35
+#pragma warning disable SA1130 // Use lambda syntax
                 ThreadPool.QueueUserWorkItem(delegate
                 {
                     ReadCompleted(this, socketAsync);
                 });
+#pragma warning restore SA1130 // Use lambda syntax
 #else
                 Task.Factory.StartNew(() =>
                 {
@@ -311,7 +313,7 @@ ReadCompletedBegin:
         }
 
         /// <summary>Calls the Error event (if set) and closes the connection.</summary>
-        /// <param name="ex">The exception (in most cases this will be a <see cref="SocketException"/></param>
+        /// <param name="ex">The exception (in most cases this will be a <see cref="SocketException"/>.</param>
         protected internal virtual void OnError(Exception ex)
         {
             if (!closing)
@@ -484,11 +486,11 @@ ReadCompletedBegin:
 #endif
 
         /// <summary>
-        /// Connects to the specified hostname and port
+        /// Connects to the specified hostname and port.
         /// </summary>
-        /// <param name="hostname">hostname to resolve</param>
-        /// <param name="port">port to connect to</param>
-        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        /// <param name="hostname">hostname to resolve.</param>
+        /// <param name="port">port to connect to.</param>
+        /// <param name="bufferSize">tcp buffer size in bytes.</param>
         public void Connect(string hostname, int port, int bufferSize = 64 * 1024)
         {
             if (closing)
@@ -510,11 +512,11 @@ ReadCompletedBegin:
         }
 
         /// <summary>
-        /// Connects to the specified hostname and port
+        /// Connects to the specified hostname and port.
         /// </summary>
-        /// <param name="hostname">hostname to resolve</param>
-        /// <param name="port">port to connect to</param>
-        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        /// <param name="hostname">hostname to resolve.</param>
+        /// <param name="port">port to connect to.</param>
+        /// <param name="bufferSize">tcp buffer size in bytes.</param>
         public void ConnectAsync(string hostname, int port, int bufferSize = 64 * 1024)
         {
             if (closing)
@@ -536,11 +538,11 @@ ReadCompletedBegin:
         }
 
         /// <summary>
-        /// Connects to the specified address and port
+        /// Connects to the specified address and port.
         /// </summary>
-        /// <param name="address">ip address to connect to</param>
-        /// <param name="port">port to connect to</param>
-        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        /// <param name="address">ip address to connect to.</param>
+        /// <param name="port">port to connect to.</param>
+        /// <param name="bufferSize">tcp buffer size in bytes.</param>
         public void Connect(IPAddress address, int port, int bufferSize = 64 * 1024)
         {
             if (closing)
@@ -564,15 +566,15 @@ ReadCompletedBegin:
         }
 
         /// <summary>
-        /// Performs an asynchonous connect to the specified address and port
+        /// Performs an asynchonous connect to the specified address and port.
         /// </summary>
         /// <remarks>
         /// This function returns immediately.
         /// Results are delivered by the <see cref="Error"/> / <see cref="Connected"/> events.
         /// </remarks>
-        /// <param name="address">ip address to connect to</param>
-        /// <param name="port">port to connect to</param>
-        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        /// <param name="address">ip address to connect to.</param>
+        /// <param name="port">port to connect to.</param>
+        /// <param name="bufferSize">tcp buffer size in bytes.</param>
         public void ConnectAsync(IPAddress address, int port, int bufferSize = 64 * 1024)
         {
             if (closing)
@@ -590,24 +592,24 @@ ReadCompletedBegin:
         }
 
         /// <summary>
-        /// Connects to the specified address and port
+        /// Connects to the specified address and port.
         /// </summary>
-        /// <param name="endPoint">ip endpoint to connect to</param>
-        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        /// <param name="endPoint">ip endpoint to connect to.</param>
+        /// <param name="bufferSize">tcp buffer size in bytes.</param>
         public void Connect(IPEndPoint endPoint, int bufferSize = 64 * 1024)
         {
             Connect(endPoint.Address, endPoint.Port, bufferSize);
         }
 
         /// <summary>
-        /// Performs an asynchonous connect to the specified address and port
+        /// Performs an asynchonous connect to the specified address and port.
         /// </summary>
         /// <remarks>
         /// This function returns immediately.
         /// Results are delivered by the <see cref="Error"/> / <see cref="Connected"/> events.
         /// </remarks>
-        /// <param name="endPoint">ip endpoint to connect to</param>
-        /// <param name="bufferSize">tcp buffer size in bytes</param>
+        /// <param name="endPoint">ip endpoint to connect to.</param>
+        /// <param name="bufferSize">tcp buffer size in bytes.</param>
         public void ConnectAsync(EndPoint endPoint, int bufferSize = 64 * 1024)
         {
             EnterLock();
@@ -636,7 +638,7 @@ ReadCompletedBegin:
         /// <summary>Gets the stream.</summary>
         /// <returns>Returns the <see cref="Stream"/> instance used to send and receive data.</returns>
         /// <remarks>This function and access to all stream functions are threadsafe.</remarks>
-        /// <exception cref="System.InvalidOperationException">Not connected!</exception>
+        /// <exception cref="System.InvalidOperationException">Not connected.</exception>
         public virtual Stream GetStream() => Stream;
 
         /// <summary>
@@ -644,7 +646,7 @@ ReadCompletedBegin:
         /// </summary>
         /// <remarks>
         /// This function is threadsafe, howeverc alling this method more than one time prior completion may result in a
-        /// different byte sequence at the receiver!
+        /// different byte sequence at the receiver.
         /// </remarks>
         /// <remarks>This function is threadsafe.</remarks>
         /// <param name="buffer">An array of bytes to be send.</param>
@@ -652,11 +654,11 @@ ReadCompletedBegin:
         public void SendAsync(byte[] buffer, Action callback = null) => SendAsync(buffer, 0, buffer.Length, callback);
 
         /// <summary>
-        /// Sends data asynchronously to a connected remote
+        /// Sends data asynchronously to a connected remote.
         /// </summary>
         /// <remarks>
         /// This function is threadsafe, howeverc alling this method more than one time prior completion may result in a
-        /// different byte sequence at the receiver!
+        /// different byte sequence at the receiver.
         /// </remarks>
         /// <param name="buffer">An array of bytes to be send.</param>
         /// <param name="length">The number of bytes.</param>
@@ -664,11 +666,11 @@ ReadCompletedBegin:
         public void SendAsync(byte[] buffer, int length, Action callback = null) => SendAsync(buffer, 0, length, callback);
 
         /// <summary>
-        /// Sends data asynchronously to a connected remote
+        /// Sends data asynchronously to a connected remote.
         /// </summary>
         /// <remarks>
         /// This function is threadsafe, howeverc alling this method more than one time prior completion may result in a
-        /// different byte sequence at the receiver!
+        /// different byte sequence at the receiver.
         /// </remarks>
         /// <param name="buffer">An array of bytes to be send.</param>
         /// <param name="offset">The start offset at the byte array.</param>
@@ -731,17 +733,17 @@ ReadCompletedBegin:
         public void Send(byte[] buffer) => Send(buffer, 0, buffer.Length);
 
         /// <summary>
-        /// Sends data to a connected remote
+        /// Sends data to a connected remote.
         /// </summary>
-        /// <remarks>This function is threadsafe</remarks>
+        /// <remarks>This function is threadsafe.</remarks>
         /// <param name="buffer">An array of bytes to be send.</param>
         /// <param name="length">The number of bytes.</param>
         public void Send(byte[] buffer, int length) => Send(buffer, 0, length);
 
         /// <summary>
-        /// Sends data to a connected remote
+        /// Sends data to a connected remote.
         /// </summary>
-        /// <remarks>This function is threadsafe</remarks>
+        /// <remarks>This function is threadsafe.</remarks>
         /// <param name="buffer">An array of bytes to be send.</param>
         /// <param name="offset">The start offset at the byte array.</param>
         /// <param name="length">The number of bytes.</param>
@@ -853,7 +855,7 @@ ReadCompletedBegin:
         #region public properties
 
         /// <summary>Gets the raw TCP stream used to send and receive data.</summary>
-        /// <remarks>This function and access to all stream functions are threadsafe</remarks>
+        /// <remarks>This function and access to all stream functions are threadsafe.</remarks>
         /// <value>The TCP stream instance.</value>
         public TcpAsyncStream Stream { get; }
 
@@ -876,7 +878,7 @@ ReadCompletedBegin:
         public long BytesSent => Interlocked.Read(ref bytesSent);
 
         /// <summary>
-        /// Gets the number of active async send tasks
+        /// Gets the number of active async send tasks.
         /// </summary>
         public int PendingAsyncSends => pendingAsyncSends;
 
@@ -890,7 +892,7 @@ ReadCompletedBegin:
 
         /// <summary>Gets or sets the amount of time, in milliseconds, that a read operation blocks waiting for data.</summary>
         /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a read operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the read operation does not time out.</value>
-        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/>.</remarks>
         public int ReceiveTimeout
         {
             get => CachedValue(ref receiveTimeout, () => uncheckedSocket.ReceiveTimeout);
@@ -899,7 +901,7 @@ ReadCompletedBegin:
 
         /// <summary>Gets or sets the amount of time, in milliseconds, that a write operation blocks waiting for transmission.</summary>
         /// <value>A Int32 that specifies the amount of time, in milliseconds, that will elapse before a write operation fails. The default value, <see cref="Timeout.Infinite"/>, specifies that the write operation does not time out.</value>
-        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/>.</remarks>
         public int SendTimeout
         {
             get => CachedValue(ref sendTimeout, () => uncheckedSocket.SendTimeout);
@@ -919,7 +921,7 @@ ReadCompletedBegin:
         /// <summary>
         /// Gets or sets a value that specifies the Time To Live (TTL) value of Internet Protocol (IP) packets sent by the Socket.
         /// </summary>
-        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/>.</remarks>
         public short Ttl
         {
             get => CachedValue(ref ttl, () => uncheckedSocket.Ttl);
@@ -928,7 +930,7 @@ ReadCompletedBegin:
 
         /// <summary>Gets or sets a value indicating whether the stream Socket is using the Nagle algorithm.</summary>
         /// <value><c>true</c> if the Socket uses the Nagle algorithm; otherwise, <c>false</c>.</value>
-        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/>.</remarks>
         public bool NoDelay
         {
             get => CachedValue(ref nodelay, () => uncheckedSocket.NoDelay);
@@ -938,7 +940,7 @@ ReadCompletedBegin:
         /// <summary>
         /// Gets or sets a value that specifies whether the Socket will delay closing a socket in an attempt to send all pending data.
         /// </summary>
-        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/></remarks>
+        /// <remarks>This cannot be accessed prior <see cref="Connect(string, int, int)"/>.</remarks>
         public LingerOption LingerState
         {
             get => CachedValue(ref lingerState, () => uncheckedSocket.LingerState);
@@ -954,7 +956,7 @@ ReadCompletedBegin:
         /// <summary>
         /// Returns a string that represents the current object.
         /// </summary>
-        /// <returns>tcp://remoteip:port</returns>
+        /// <returns>tcp://remoteip:port.</returns>
         public override string ToString()
         {
             return $"tcp://{RemoteEndPoint}";
